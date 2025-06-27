@@ -17,11 +17,9 @@ Example on Samsung Galaxy Z Fold4:
 
 4. Turbo mode may not work on all devices.
 
-5. On some devices, Turbo mode may turn off if the GPU is not under load. In this case, enable Turbo through the pop-up window while the game is running.
+5. On some devices, Turbo mode may turn off if the GPU is not under load. In this case, enable Turbo through the floating window while the game is running.
 
 6. On some devices, if Turbo is enabled, after locking the screen the GPU may get stuck at a low frequency. To fix this, restart the device.
-
-7. You can check GPU frequency using apps like CPU Float, but some devices requiring ROOT for this.
 
 ## Third party applications
 

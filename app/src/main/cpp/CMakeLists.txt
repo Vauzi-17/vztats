@@ -6,7 +6,6 @@ cmake_minimum_required(VERSION 3.22.1)
 project("adrenoturboswitch")
 
 add_subdirectory( adrenotools )
-add_subdirectory( sds_library )
 
 
 add_library(adrenoturboswitch SHARED
@@ -16,7 +15,6 @@ add_library(adrenoturboswitch SHARED
 
 
 target_link_libraries(adrenoturboswitch
-        sds_library
         android
         log
         adrenotools)

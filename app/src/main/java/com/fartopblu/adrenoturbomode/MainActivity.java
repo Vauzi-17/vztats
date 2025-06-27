@@ -8,6 +8,12 @@ import android.view.View;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.color.DynamicColors;
+import android.widget.TextView;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.util.Scanner;
+import java.util.TimerTask;
+import java.util.Timer;
 
 public class MainActivity extends Activity {
     static {
@@ -51,7 +57,6 @@ public class MainActivity extends Activity {
             editor.apply();
         }
 
-
         buttonAbout.setOnClickListener((l) -> showAboutDialog());
 
         button_enable.setOnClickListener((l) -> {
@@ -63,5 +68,31 @@ public class MainActivity extends Activity {
             DisableTurbo();
             button_enable.setEnabled(true);
         });
+
+        // Frequency check
+        boolean gpu_freq_support = true;
+        try (Scanner scanner = new Scanner(new File("/sys/class/kgsl/kgsl-3d0/gpuclk"))) {
+        } catch (FileNotFoundException e) {
+            gpu_freq_support = false;
+            TextView gpu_freq_text = findViewById(R.id.textGpuFreq);
+            gpu_freq_text.setText("Current frequency: Error, displaying unsupported on this device.");
+        }
+
+        if (gpu_freq_support) {
+            Timer timer = new Timer();
+            timer.schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    try (Scanner scanner = new Scanner(new File("/sys/class/kgsl/kgsl-3d0/gpuclk"))) {
+                        int freq = (scanner.nextInt())/1000000;
+                        runOnUiThread(() -> {
+                            TextView gpu_freq_text = findViewById(R.id.textGpuFreq);
+                            gpu_freq_text.setText("Current frequency: " + freq + " Mhz");
+                        });
+                    } catch (FileNotFoundException ignored) {
+                    }
+                }
+            }, 0, 1300);
+        }
     }
 }

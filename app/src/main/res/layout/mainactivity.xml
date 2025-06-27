@@ -20,6 +20,24 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.09" />
 
+    <TextView
+        android:id="@+id/textGpuFreq"
+        android:layout_width="188dp"
+        android:layout_height="52dp"
+        android:ellipsize="end"
+        android:maxWidth="250dp"
+        android:maxLines="10"
+        android:text="Current frequency: "
+        android:textColor="@color/cardview_light_background"
+        android:textSize="12sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/button_disable"
+        app:layout_constraintVertical_bias="0" />
+
+
+
     <androidx.constraintlayout.widget.Guideline
         android:id="@+id/guideline_horizontal"
         android:layout_width="wrap_content"
