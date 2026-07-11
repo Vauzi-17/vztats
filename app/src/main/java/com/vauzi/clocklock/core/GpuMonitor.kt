@@ -62,6 +62,44 @@ object GpuMonitor {
     private fun readInt(f: File): Int? =
         runCatching { f.readText().trim().toInt() }.getOrNull()
 
+    private fun readRaw(name: String): String? =
+        runCatching { File("$KGSL_DIR/$name").readText().trim() }
+            .getOrNull()?.takeIf { it.isNotEmpty() }
+
+    /**
+     * One-shot dump of the KGSL power/frequency description. The app can read
+     * these even though `adb shell` often can't (different SELinux domain).
+     */
+    fun readDetails(): GpuDetails {
+        val freqsHz = (readRaw("gpu_available_frequencies")
+            ?: readRaw("devfreq/available_frequencies"))
+            ?.split(Regex("\\s+"))
+            ?.mapNotNull { it.toLongOrNull() }
+            ?: emptyList()
+
+        val freqsMhz = freqsHz
+            .map { (it / 1_000_000L).toInt() }
+            .filter { it > 0 }
+            .distinct()
+            .sortedDescending()
+
+        val maxClampHz = readLong(MAX_GPUCLK)?.takeIf { it > 0 }
+            ?: readLong(DEVFREQ_MAX)?.takeIf { it > 0 }
+
+        return GpuDetails(
+            model = readRaw("gpu_model"),
+            availableFreqsMhz = freqsMhz,
+            maxClampMhz = maxClampHz?.let { (it / 1_000_000L).toInt() },
+            minMhz = readLong(File("$KGSL_DIR/devfreq/min_freq"))?.let { (it / 1_000_000L).toInt() },
+            numPwrLevels = readInt(File("$KGSL_DIR/num_pwrlevels")),
+            thermalPwrLevel = readInt(File("$KGSL_DIR/thermal_pwrlevel")),
+            defaultPwrLevel = readInt(File("$KGSL_DIR/default_pwrlevel")),
+            maxPwrLevel = readInt(File("$KGSL_DIR/max_pwrlevel")),
+            minPwrLevel = readInt(File("$KGSL_DIR/min_pwrlevel")),
+            governor = readRaw("devfreq/governor")
+        )
+    }
+
     /**
      * Emits a fresh sample roughly every [periodMs]. Cold flow — collection
      * drives the polling and cancellation stops it.
@@ -104,4 +142,29 @@ data class GpuSample(
     /** True when the clock is pinned at (near) the maximum — turbo working. */
     val isAtMax: Boolean
         get() = loadOfMax?.let { it >= 0.97f } ?: false
+}
+
+/** Static-ish description of the GPU's frequency/power-level table. */
+data class GpuDetails(
+    val model: String?,
+    val availableFreqsMhz: List<Int>,
+    val maxClampMhz: Int?,
+    val minMhz: Int?,
+    val numPwrLevels: Int?,
+    val thermalPwrLevel: Int?,
+    val defaultPwrLevel: Int?,
+    val maxPwrLevel: Int?,
+    val minPwrLevel: Int?,
+    val governor: String?
+) {
+    /** Highest bin in the table = the absolute ceiling without a custom kernel. */
+    val ceilingMhz: Int? get() = availableFreqsMhz.maxOrNull()
+
+    /** True if the active max clamp sits below the table ceiling (vendor/thermal cap). */
+    val cappedBelowCeiling: Boolean
+        get() {
+            val c = ceilingMhz ?: return false
+            val m = maxClampMhz ?: return false
+            return m < c
+        }
 }

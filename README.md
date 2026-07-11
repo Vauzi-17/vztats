@@ -1,4 +1,4 @@
-# AdrenoGPU-Turbo-Mode
+# Adreno Clock Lock
 
 Locks the maximum frequency of Adreno GPUs ("Turbo mode") **without root or ADB**,
 by disabling the KGSL driver's dynamic clock scaling (DCVS) through a userspace ioctl.

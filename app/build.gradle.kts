@@ -17,8 +17,8 @@ android {
         // <= targetSdk, and a lower minSdk also supports more old devices.
         minSdk = 25
         targetSdk = 25
-        versionCode = 14
-        versionName = "2.1"
+        versionCode = 15
+        versionName = "2.2"
 
         ndk {
             abiFilters += "arm64-v8a"
