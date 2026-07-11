@@ -111,6 +111,10 @@ class Prefs private constructor(private val sp: SharedPreferences) {
         const val METRIC_GPU_TEMP = "gpu_temp"
         const val METRIC_CPU_FREQ = "cpu_freq"
         const val METRIC_CPU_TEMP = "cpu_temp"
+        const val METRIC_FPS = "fps"
+        const val METRIC_BATT_POWER = "batt_power"
+        const val METRIC_BATT_TEMP = "batt_temp"
+        const val METRIC_RAM = "ram"
 
         val DEFAULT_METRICS: Set<String> =
             setOf(METRIC_GPU_FREQ, METRIC_GPU_TEMP, METRIC_CPU_FREQ)

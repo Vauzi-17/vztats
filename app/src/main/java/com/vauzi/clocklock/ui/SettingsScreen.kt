@@ -30,10 +30,14 @@ import com.vauzi.clocklock.ui.theme.ThemeMode
 private data class Metric(val key: String, val label: String)
 
 private val METRICS = listOf(
+    Metric(Prefs.METRIC_FPS, "FPS (needs Shizuku)"),
     Metric(Prefs.METRIC_GPU_FREQ, "GPU frequency"),
     Metric(Prefs.METRIC_GPU_TEMP, "GPU temperature"),
     Metric(Prefs.METRIC_CPU_FREQ, "CPU frequency"),
-    Metric(Prefs.METRIC_CPU_TEMP, "CPU temperature")
+    Metric(Prefs.METRIC_CPU_TEMP, "CPU temperature"),
+    Metric(Prefs.METRIC_BATT_POWER, "Battery draw (mA)"),
+    Metric(Prefs.METRIC_BATT_TEMP, "Battery temperature"),
+    Metric(Prefs.METRIC_RAM, "RAM used")
 )
 
 @Composable

@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vauzi.clocklock.core.SystemMonitor
 import com.vauzi.clocklock.core.SystemSample
@@ -52,11 +53,12 @@ fun AppRoot(
     var current by remember { mutableStateOf(Dest.CONTROL) }
     val turboState by TurboManager.state.collectAsStateWithLifecycle()
 
+    val context = LocalContext.current
     var sample by remember { mutableStateOf<SystemSample?>(null) }
     val history = remember { mutableStateListOf<Int>() }
 
     LaunchedEffect(Unit) {
-        SystemMonitor.sampleFlow(periodMs = 1000L).collect { s ->
+        SystemMonitor.sampleFlow(context, periodMs = 1000L).collect { s ->
             sample = s
             s.gpu.freqMhz?.let {
                 history.add(it)

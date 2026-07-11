@@ -15,6 +15,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import com.vauzi.clocklock.core.CpuSample
 import com.vauzi.clocklock.core.GpuSample
+import com.vauzi.clocklock.core.PowerSample
 import com.vauzi.clocklock.core.Prefs
 import com.vauzi.clocklock.core.TurboManager
 import kotlin.math.roundToInt
@@ -46,6 +47,8 @@ class OverlayController(private val context: Context) {
 
     private var lastGpu: GpuSample? = null
     private var lastCpu: CpuSample? = null
+    private var lastPower: PowerSample? = null
+    private var lastFps: Int? = null
 
     private var dragStartX = 0
     private var dragStartY = 0
@@ -122,9 +125,11 @@ class OverlayController(private val context: Context) {
 
     // --- data -----------------------------------------------------------------
 
-    fun updateStats(gpu: GpuSample?, cpu: CpuSample?) {
+    fun updateStats(gpu: GpuSample?, cpu: CpuSample?, power: PowerSample? = null, fps: Int? = null) {
         lastGpu = gpu
         lastCpu = cpu
+        lastPower = power
+        lastFps = fps
         applyValues()
     }
 
@@ -348,24 +353,34 @@ class OverlayController(private val context: Context) {
     private fun orderedMetrics(): List<String> {
         val enabled = prefs.floatingMetrics
         return listOf(
+            Prefs.METRIC_FPS,
             Prefs.METRIC_GPU_FREQ, Prefs.METRIC_GPU_TEMP,
-            Prefs.METRIC_CPU_FREQ, Prefs.METRIC_CPU_TEMP
+            Prefs.METRIC_CPU_FREQ, Prefs.METRIC_CPU_TEMP,
+            Prefs.METRIC_BATT_POWER, Prefs.METRIC_BATT_TEMP, Prefs.METRIC_RAM
         ).filter { it in enabled }
     }
 
     private fun metricLabel(key: String): String = when (key) {
+        Prefs.METRIC_FPS -> "FPS"
         Prefs.METRIC_GPU_FREQ -> "GPU"
         Prefs.METRIC_GPU_TEMP -> "GPU °C"
         Prefs.METRIC_CPU_FREQ -> "CPU"
         Prefs.METRIC_CPU_TEMP -> "CPU °C"
+        Prefs.METRIC_BATT_POWER -> "mA"
+        Prefs.METRIC_BATT_TEMP -> "BAT °C"
+        Prefs.METRIC_RAM -> "RAM"
         else -> key
     }
 
     private fun metricValue(key: String): String = when (key) {
+        Prefs.METRIC_FPS -> lastFps?.toString() ?: "—"
         Prefs.METRIC_GPU_FREQ -> lastGpu?.freqMhz?.let { "$it MHz" } ?: "—"
         Prefs.METRIC_GPU_TEMP -> lastGpu?.tempC?.let { "${it.roundToInt()}°" } ?: "—"
         Prefs.METRIC_CPU_FREQ -> lastCpu?.freqGhzText ?: "—"
         Prefs.METRIC_CPU_TEMP -> lastCpu?.tempC?.let { "${it.roundToInt()}°" } ?: "—"
+        Prefs.METRIC_BATT_POWER -> lastPower?.currentMa?.let { "$it mA" } ?: "—"
+        Prefs.METRIC_BATT_TEMP -> lastPower?.batteryTempC?.let { "${it.roundToInt()}°" } ?: "—"
+        Prefs.METRIC_RAM -> lastPower?.ramUsedGbText?.let { "$it GB" } ?: "—"
         else -> "—"
     }
 

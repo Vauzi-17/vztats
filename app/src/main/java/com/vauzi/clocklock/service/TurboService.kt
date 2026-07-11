@@ -19,9 +19,13 @@ import com.vauzi.clocklock.MainActivity
 import com.vauzi.clocklock.R
 import com.vauzi.clocklock.core.CpuMonitor
 import com.vauzi.clocklock.core.CpuSample
+import com.vauzi.clocklock.core.FpsProbe
 import com.vauzi.clocklock.core.GpuMonitor
 import com.vauzi.clocklock.core.GpuSample
+import com.vauzi.clocklock.core.PowerMonitor
 import com.vauzi.clocklock.core.Prefs
+import com.vauzi.clocklock.core.SessionRecorder
+import com.vauzi.clocklock.core.SystemMonitor
 import com.vauzi.clocklock.core.TurboManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -209,26 +213,22 @@ class TurboService : Service() {
 
     private fun startStatsLoop() {
         scope.launch {
-            var gpuMax = GpuMonitor.maxFreqHz()
-            var cpuMax = CpuMonitor.maxFreqKhz()
             while (isActive) {
                 delay(1_000L)
                 val ov = overlay
-                if (ov == null || !ov.isShowing) continue
-                if (gpuMax == null) gpuMax = GpuMonitor.maxFreqHz()
-                if (cpuMax == null) cpuMax = CpuMonitor.maxFreqKhz()
-                val gpu = GpuSample(
-                    freqHz = GpuMonitor.currentFreqHz(),
-                    maxFreqHz = gpuMax,
-                    tempMilliC = GpuMonitor.gpuTempMilliC(),
-                    timestampMs = System.currentTimeMillis()
+                val overlayShowing = ov != null && ov.isShowing
+                val recording = SessionRecorder.recording.value
+                if (!overlayShowing && !recording) continue
+
+                val sample = SystemMonitor.snapshot(
+                    applicationContext, null, null, FpsProbe.currentFps
                 )
-                val cpu = CpuSample(
-                    curKhzMax = CpuMonitor.curFreqKhzMax(),
-                    maxKhz = cpuMax,
-                    tempMilliC = CpuMonitor.cpuTempMilliC()
-                )
-                withContext(Dispatchers.Main) { ov.updateStats(gpu, cpu) }
+                if (recording) SessionRecorder.feed(sample)
+                if (overlayShowing) {
+                    withContext(Dispatchers.Main) {
+                        ov?.updateStats(sample.gpu, sample.cpu, sample.power, sample.fps)
+                    }
+                }
             }
         }
     }
@@ -239,7 +239,7 @@ class TurboService : Service() {
     }
 
     private fun stopIfNothingToDo() {
-        if (!prefs.desiredTurbo && !prefs.overlayEnabled) {
+        if (!prefs.desiredTurbo && !prefs.overlayEnabled && !SessionRecorder.recording.value) {
             stopSelf()
         }
     }
@@ -259,7 +259,8 @@ class TurboService : Service() {
          */
         fun sync(context: Context) {
             val prefs = Prefs.get(context)
-            val shouldRun = prefs.desiredTurbo || prefs.overlayEnabled
+            val shouldRun = prefs.desiredTurbo || prefs.overlayEnabled ||
+                SessionRecorder.recording.value
             val intent = Intent(context, TurboService::class.java)
             if (!shouldRun) intent.action = ACTION_STOP
             runCatching {
