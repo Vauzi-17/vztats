@@ -120,7 +120,7 @@ fun AppRoot(
                 hasOverlayPermission = hasOverlayPermission
             )
 
-            Dest.INFO -> InfoScreen(modifier = contentModifier)
+            Dest.INFO -> InfoScreen(modifier = contentModifier, sample = sample)
         }
     }
 }

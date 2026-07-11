@@ -21,23 +21,37 @@ object GpuMonitor {
     /** True if this device exposes the Adreno/KGSL frequency node at all. */
     val isSupported: Boolean get() = GPUCLK.canRead()
 
+    @Volatile
+    private var observedMaxHz: Long = 0L
+
+    /** Highest GPU clock actually seen this session — the empirical ceiling. */
+    val observedMaxMhz: Int?
+        get() = if (observedMaxHz > 0) (observedMaxHz / 1_000_000L).toInt() else null
+
     /** Current GPU clock in Hz, or null if unreadable. */
-    fun currentFreqHz(): Long? = readLong(GPUCLK)
+    fun currentFreqHz(): Long? {
+        val v = readLong(GPUCLK)
+        if (v != null && v > observedMaxHz) observedMaxHz = v
+        return v
+    }
 
     /**
-     * Maximum GPU clock in Hz. Tries the direct nodes first, then falls back to
-     * the largest entry of the available-frequencies list.
+     * Maximum GPU clock in Hz. Tries the direct nodes first, then the
+     * available-frequencies list, and finally falls back to the highest clock
+     * observed live (the only option on devices that block the static nodes).
      */
     fun maxFreqHz(): Long? {
         readLong(MAX_GPUCLK)?.let { if (it > 0) return it }
         readLong(DEVFREQ_MAX)?.let { if (it > 0) return it }
-        return runCatching {
+        runCatching {
             AVAILABLE_FREQS.readText()
                 .trim()
                 .split(Regex("\\s+"))
                 .mapNotNull { it.toLongOrNull() }
                 .maxOrNull()
-        }.getOrNull()
+        }.getOrNull()?.let { if (it > 0) return it }
+
+        return if (observedMaxHz > 0) observedMaxHz else null
     }
 
     /** GPU temperature in milli-degrees Celsius, or null if no GPU zone found. */
@@ -96,7 +110,8 @@ object GpuMonitor {
             defaultPwrLevel = readInt(File("$KGSL_DIR/default_pwrlevel")),
             maxPwrLevel = readInt(File("$KGSL_DIR/max_pwrlevel")),
             minPwrLevel = readInt(File("$KGSL_DIR/min_pwrlevel")),
-            governor = readRaw("devfreq/governor")
+            governor = readRaw("devfreq/governor"),
+            observedMaxMhz = observedMaxMhz
         )
     }
 
@@ -155,10 +170,15 @@ data class GpuDetails(
     val defaultPwrLevel: Int?,
     val maxPwrLevel: Int?,
     val minPwrLevel: Int?,
-    val governor: String?
+    val governor: String?,
+    val observedMaxMhz: Int?
 ) {
     /** Highest bin in the table = the absolute ceiling without a custom kernel. */
     val ceilingMhz: Int? get() = availableFreqsMhz.maxOrNull()
+
+    /** True when the device blocks apps from reading the static description. */
+    val staticTableBlocked: Boolean
+        get() = model == null && availableFreqsMhz.isEmpty() && numPwrLevels == null
 
     /** True if the active max clamp sits below the table ceiling (vendor/thermal cap). */
     val cappedBelowCeiling: Boolean

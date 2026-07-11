@@ -3,6 +3,7 @@ package com.vauzi.clocklock.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,14 +26,16 @@ import com.vauzi.clocklock.core.CpuMonitor
 import com.vauzi.clocklock.core.GpuDetails
 import com.vauzi.clocklock.core.GpuMonitor
 import com.vauzi.clocklock.core.NativeBridge
+import com.vauzi.clocklock.core.SystemSample
 import com.vauzi.clocklock.ui.theme.TurboAmber
 import com.vauzi.clocklock.ui.theme.TurboGreen
 import com.vauzi.clocklock.ui.theme.TurboRed
 
 @Composable
-fun InfoScreen(modifier: Modifier = Modifier) {
+fun InfoScreen(modifier: Modifier = Modifier, sample: SystemSample? = null) {
     val context = LocalContext.current
     val details = remember { GpuMonitor.readDetails() }
+    val effectiveMax = sample?.gpu?.maxFreqMhz ?: details.observedMaxMhz
 
     Column(
         modifier
@@ -42,7 +45,7 @@ fun InfoScreen(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text("Compatibility", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Card {
+        InfoCard {
             CompatRow("Native turbo library", NativeBridge.available)
             CompatRow("GPU frequency readable", GpuMonitor.isSupported)
             CompatRow("CPU frequency readable", CpuMonitor.isSupported)
@@ -58,10 +61,10 @@ fun InfoScreen(modifier: Modifier = Modifier) {
         }
 
         Text("GPU hardware", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        GpuDetailsCard(details)
+        InfoCard { GpuDetailsBody(details, effectiveMax) }
 
         Text("About", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Card {
+        InfoCard {
             Text(
                 text = context.getString(R.string.about_body),
                 style = MaterialTheme.typography.bodyMedium
@@ -71,9 +74,25 @@ fun InfoScreen(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun GpuDetailsCard(d: GpuDetails) {
-    Card {
-        InfoRow("Model", d.model ?: "—")
+private fun GpuDetailsBody(d: GpuDetails, effectiveMax: Int?) {
+    InfoRow("Model", d.model ?: "—")
+
+    if (d.staticTableBlocked) {
+        InfoRow(
+            "Observed max (live)",
+            effectiveMax?.let { "$it MHz" } ?: "—",
+            valueColor = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            "This device blocks apps from reading the static KGSL table (root-only), so " +
+                "model/bins/levels show \"—\". The observed max above is read live from gpuclk — " +
+                "turn on turbo (or run a game) so the GPU hits its peak, and that value is your " +
+                "real ceiling.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 10.dp)
+        )
+    } else {
         InfoRow(
             "Ceiling (top bin)",
             d.ceilingMhz?.let { "$it MHz" } ?: "—",
@@ -85,7 +104,6 @@ private fun GpuDetailsCard(d: GpuDetails) {
         InfoRow("Governor", d.governor ?: "—")
         InfoRow("Power levels", d.numPwrLevels?.toString() ?: "—")
         InfoRow("Thermal-limited level", d.thermalPwrLevel?.toString() ?: "—")
-
         if (d.availableFreqsMhz.isNotEmpty()) {
             Text(
                 "Frequency table (MHz)",
@@ -95,14 +113,14 @@ private fun GpuDetailsCard(d: GpuDetails) {
             )
             FreqTable(d.availableFreqsMhz, top = d.ceilingMhz)
         }
-
-        Text(
-            verdictFor(d),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 10.dp)
-        )
     }
+
+    Text(
+        verdictFor(d, effectiveMax),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 10.dp)
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -132,20 +150,27 @@ private fun FreqTable(freqs: List<Int>, top: Int?) {
     }
 }
 
-private fun verdictFor(d: GpuDetails): String {
-    val ceiling = d.ceilingMhz ?: return "Couldn't read the frequency table on this device."
-    val base = "Going above $ceiling MHz (true overclock) requires a custom kernel — it can't be " +
-        "done from userspace or with root alone."
-    return if (d.cappedBelowCeiling)
-        "The active max clamp (${d.maxClampMhz} MHz) sits below the $ceiling MHz ceiling — a " +
-            "vendor/thermal cap. Lifting it to the ceiling would need root, and it still can't " +
-            "exceed $ceiling MHz. $base"
-    else
-        "Turbo already targets the top bin ($ceiling MHz) — the ceiling. $base"
+private fun verdictFor(d: GpuDetails, effectiveMax: Int?): String {
+    val kernelNote = "Going above the ceiling (true overclock) requires a custom kernel — it " +
+        "can't be done from userspace or with root alone."
+    return when {
+        d.staticTableBlocked && effectiveMax != null ->
+            "Observed ceiling so far is $effectiveMax MHz — turbo already targets it. $kernelNote"
+        d.staticTableBlocked ->
+            "Turn on turbo or run a game so the GPU reaches its peak; the observed max becomes " +
+                "your ceiling. $kernelNote"
+        d.cappedBelowCeiling ->
+            "The active max clamp (${d.maxClampMhz} MHz) sits below the ${d.ceilingMhz} MHz " +
+                "ceiling — a vendor/thermal cap. Lifting it needs root and still can't exceed " +
+                "${d.ceilingMhz} MHz. $kernelNote"
+        d.ceilingMhz != null ->
+            "Turbo already targets the top bin (${d.ceilingMhz} MHz) — the ceiling. $kernelNote"
+        else -> "Couldn't read the frequency table on this device."
+    }
 }
 
 @Composable
-private fun Card(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+private fun InfoCard(content: @Composable ColumnScope.() -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
