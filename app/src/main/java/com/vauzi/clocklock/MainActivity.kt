@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import com.vauzi.clocklock.core.Prefs
 import com.vauzi.clocklock.core.TurboManager
+import com.vauzi.clocklock.shizuku.FpsSampler
 import com.vauzi.clocklock.ui.AppRoot
 import com.vauzi.clocklock.ui.theme.AdrenoTurboTheme
 import com.vauzi.clocklock.ui.theme.ThemeMode
@@ -32,6 +33,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         TurboManager.init(this)
+        FpsSampler.attachAutoStart(this)
         maybeRequestNotifications()
 
         val prefs = Prefs.get(this)

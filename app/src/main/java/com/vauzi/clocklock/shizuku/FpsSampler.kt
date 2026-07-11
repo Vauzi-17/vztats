@@ -6,6 +6,7 @@ import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.IBinder
 import com.vauzi.clocklock.core.FpsProbe
+import com.vauzi.clocklock.core.Prefs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -48,8 +49,55 @@ object FpsSampler {
         false
     }
 
+    private var attached = false
+
+    private val binderReceivedListener =
+        Shizuku.OnBinderReceivedListener { tryAutoStart() }
+    private val binderDeadListener =
+        Shizuku.OnBinderDeadListener { onBinderDead() }
+
+    /**
+     * Registers Shizuku listeners once and resumes FPS if the user previously
+     * enabled it and Shizuku is available. Call from the Activity/service start
+     * so a single activation keeps working across app launches (and after a
+     * Shizuku restart) with no wifi/adb needed again.
+     */
+    fun attachAutoStart(context: Context) {
+        appContext = context.applicationContext
+        if (!attached) {
+            attached = true
+            runCatching {
+                Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
+                Shizuku.addBinderDeadListener(binderDeadListener)
+            }
+        }
+        tryAutoStart()
+    }
+
+    private fun tryAutoStart() {
+        val ctx = appContext ?: return
+        if (!Prefs.get(ctx).fpsEnabled || isOn) return
+        if (!shizukuReady()) return
+        val granted = try {
+            Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+        } catch (t: Throwable) {
+            false
+        }
+        if (granted) bindAndStart()
+    }
+
+    private fun onBinderDead() {
+        stopLoop()
+        service = null
+        cachedLayer = null
+        FpsProbe.update(null)
+        val stillWanted = appContext?.let { Prefs.get(it).fpsEnabled } == true
+        if (stillWanted) set(State.UNAVAILABLE, "Shizuku stopped — restart it to resume FPS.")
+    }
+
     fun enable(context: Context) {
         appContext = context.applicationContext
+        Prefs.get(context).fpsEnabled = true
         if (!shizukuReady()) {
             set(State.UNAVAILABLE, "Shizuku isn't running. Open Shizuku and start it first.")
             return
@@ -72,6 +120,7 @@ object FpsSampler {
     }
 
     fun disable() {
+        appContext?.let { Prefs.get(it).fpsEnabled = false }
         stopLoop()
         unbind()
         FpsProbe.setActive(false)

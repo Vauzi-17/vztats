@@ -27,6 +27,7 @@ import com.vauzi.clocklock.core.Prefs
 import com.vauzi.clocklock.core.SessionRecorder
 import com.vauzi.clocklock.core.SystemMonitor
 import com.vauzi.clocklock.core.TurboManager
+import com.vauzi.clocklock.shizuku.FpsSampler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -93,6 +94,7 @@ class TurboService : Service() {
             }
         )
         prefs.registerListener(prefsListener)
+        FpsSampler.attachAutoStart(this)
         startAsForeground()
         startAutoSafetyLoop()
         startStatsLoop()

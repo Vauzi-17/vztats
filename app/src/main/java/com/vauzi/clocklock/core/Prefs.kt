@@ -50,6 +50,11 @@ class Prefs private constructor(private val sp: SharedPreferences) {
         get() = sp.getBoolean(KEY_DYNAMIC, false)
         set(value) = sp.edit().putBoolean(KEY_DYNAMIC, value).apply()
 
+    /** Whether the user has enabled the Shizuku FPS sampler (auto-resumes). */
+    var fpsEnabled: Boolean
+        get() = sp.getBoolean(KEY_FPS_ENABLED, false)
+        set(value) = sp.edit().putBoolean(KEY_FPS_ENABLED, value).apply()
+
     // --- Floating window customisation ---------------------------------------
 
     /** Which metrics the floating panel shows, as a set of METRIC_* keys. */
@@ -88,6 +93,7 @@ class Prefs private constructor(private val sp: SharedPreferences) {
         const val KEY_FIRST_RUN = "first_run"
         const val KEY_THEME = "theme_mode"
         const val KEY_DYNAMIC = "dynamic_color"
+        const val KEY_FPS_ENABLED = "fps_enabled"
         const val KEY_FLOAT_METRICS = "floating_metrics"
         const val KEY_FLOAT_MODE = "floating_mode"
         const val KEY_FLOAT_OPACITY = "floating_opacity"
