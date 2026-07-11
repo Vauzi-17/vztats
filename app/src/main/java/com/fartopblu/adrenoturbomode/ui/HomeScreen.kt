@@ -1,37 +1,46 @@
 package com.fartopblu.adrenoturbomode.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.fartopblu.adrenoturbomode.core.ApplyOutcome
-import com.fartopblu.adrenoturbomode.core.GpuSample
-import com.fartopblu.adrenoturbomode.core.Prefs
+import com.fartopblu.adrenoturbomode.core.SystemSample
 import com.fartopblu.adrenoturbomode.core.TurboManager
 import com.fartopblu.adrenoturbomode.core.TurboState
-import com.fartopblu.adrenoturbomode.service.TurboService
 import com.fartopblu.adrenoturbomode.ui.theme.TurboAmber
 import com.fartopblu.adrenoturbomode.ui.theme.TurboGreen
 import com.fartopblu.adrenoturbomode.ui.theme.TurboRed
@@ -40,186 +49,189 @@ import com.fartopblu.adrenoturbomode.ui.theme.TurboRed
 fun HomeScreen(
     modifier: Modifier = Modifier,
     turboState: TurboState,
-    sample: GpuSample?,
-    onRequestOverlayPermission: () -> Unit,
-    hasOverlayPermission: () -> Boolean
+    sample: SystemSample?
 ) {
     val context = LocalContext.current
-    val prefs = remember { Prefs.get(context) }
-
-    var overlayEnabled by remember { mutableStateOf(prefs.overlayEnabled) }
-    var reapply by remember { mutableStateOf(prefs.reapplyOnUnlock) }
-    var autoSafety by remember { mutableStateOf(prefs.autoSafetyEnabled) }
-    var tempLimit by remember { mutableIntStateOf(prefs.tempLimitC) }
-    var battLimit by remember { mutableIntStateOf(prefs.batteryLimitPct) }
+    val gpu = sample?.gpu
+    val cpu = sample?.cpu
 
     Column(
         modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // --- Main turbo toggle + verification --------------------------------
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            )
+        // --- Hero: gauge + status + power button -----------------------------
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                .padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(Modifier.padding(20.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "GPU Turbo",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Text(
-                            "Lock the Adreno clock at maximum",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                    Switch(
-                        checked = turboState.desiredOn,
-                        onCheckedChange = { TurboManager.setTurbo(context, it) }
-                    )
-                }
-
-                Spacer(Modifier.height(14.dp))
-
-                val (pillText, pillColor) = statusFor(turboState, sample)
-                StatusPill(pillText, pillColor)
-
-                Spacer(Modifier.height(10.dp))
-
-                val freqText = when {
-                    sample?.freqMhz != null && sample.maxFreqMhz != null ->
-                        "${sample.freqMhz} / ${sample.maxFreqMhz} MHz"
-                    sample?.freqMhz != null -> "${sample.freqMhz} MHz"
-                    else -> "Frequency unavailable on this device"
-                }
-                Text(
-                    freqText,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-        }
-
-        // --- Heat warning ----------------------------------------------------
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            TurboGauge(
+                fraction = gpu?.loadOfMax ?: 0f,
+                centerValue = gpu?.freqMhz?.toString() ?: "—",
+                subLabel = gpu?.maxFreqMhz?.let { "of $it MHz" } ?: "GPU clock",
+                active = turboState.desiredOn,
+                modifier = Modifier
+                    .fillMaxWidth(0.72f)
+                    .aspectRatio(1f)
             )
-        ) {
-            Text(
-                "⚠ Locking the maximum frequency increases heat and battery drain. " +
-                    "Enable auto-safety below if you want the app to back off automatically.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(16.dp)
+
+            val (pillText, pillColor) = statusFor(turboState, gpu?.isAtMax == true)
+            StatusPill(pillText, pillColor)
+
+            PowerButton(
+                on = turboState.desiredOn,
+                onToggle = { TurboManager.setTurbo(context, !turboState.desiredOn) }
             )
         }
 
-        // --- Settings --------------------------------------------------------
-        SectionHeader("Behaviour")
-
-        SettingSwitch(
-            title = "Floating toggle",
-            description = "Show a draggable ON/OFF button over games. Needs \"display over other apps\".",
-            checked = overlayEnabled,
-            onCheckedChange = { want ->
-                if (want && !hasOverlayPermission()) {
-                    onRequestOverlayPermission()
-                } else {
-                    overlayEnabled = want
-                    prefs.overlayEnabled = want
-                    TurboService.sync(context)
-                }
-            }
-        )
-
-        SettingSwitch(
-            title = "Re-apply after unlock",
-            description = "Fights the \"stuck at low clock\" bug by re-asserting turbo when the screen turns on.",
-            checked = reapply,
-            onCheckedChange = {
-                reapply = it
-                prefs.reapplyOnUnlock = it
-            }
-        )
-
-        SectionHeader("Auto-safety (optional)")
-
-        SettingSwitch(
-            title = "Auto-disable on limits",
-            description = "Turn turbo off automatically when it gets too hot or the battery is low. Leave off to stay at max no matter what.",
-            checked = autoSafety,
-            onCheckedChange = {
-                autoSafety = it
-                prefs.autoSafetyEnabled = it
-                TurboService.sync(context)
-            }
-        )
-
-        if (autoSafety) {
-            LimitSlider(
-                label = "Temperature limit: $tempLimit °C",
-                value = tempLimit.toFloat(),
-                range = 40f..60f,
-                onChange = {
-                    tempLimit = it.toInt()
-                    prefs.tempLimitC = tempLimit
-                }
+        // --- At-a-glance tiles ----------------------------------------------
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MetricTile(
+                label = "GPU temp",
+                value = gpu?.tempC?.let { "%.0f".format(it) } ?: "—",
+                unit = "°C",
+                accent = tempAccent(gpu?.tempC),
+                modifier = Modifier.weight(1f)
             )
-            LimitSlider(
-                label = "Battery floor: $battLimit %",
-                value = battLimit.toFloat(),
-                range = 5f..40f,
-                onChange = {
-                    battLimit = it.toInt()
-                    prefs.batteryLimitPct = battLimit
-                }
+            MetricTile(
+                label = "CPU clock",
+                value = cpu?.freqMhz?.let { "%.1f".format(it / 1000f) } ?: "—",
+                unit = "GHz",
+                modifier = Modifier.weight(1f)
+            )
+            MetricTile(
+                label = "CPU temp",
+                value = cpu?.tempC?.let { "%.0f".format(it) } ?: "—",
+                unit = "°C",
+                accent = tempAccent(cpu?.tempC),
+                modifier = Modifier.weight(1f)
             )
         }
 
-        Spacer(Modifier.height(8.dp))
+        // --- Heat note -------------------------------------------------------
+        Text(
+            "Locking the max frequency raises heat and battery drain. " +
+                "Turn on auto-safety in Settings if you want it to back off automatically.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(Modifier.height(4.dp))
     }
 }
 
 @Composable
-private fun LimitSlider(
-    label: String,
-    value: Float,
-    range: ClosedFloatingPointRange<Float>,
-    onChange: (Float) -> Unit
+private fun TurboGauge(
+    fraction: Float,
+    centerValue: String,
+    subLabel: String,
+    active: Boolean,
+    modifier: Modifier = Modifier
 ) {
-    Column(Modifier.fillMaxWidth()) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
-        Slider(
-            value = value,
-            onValueChange = onChange,
-            valueRange = range
+    val track = MaterialTheme.colorScheme.outlineVariant
+    val arcColor by animateColorAsState(
+        if (active) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        label = "arc"
+    )
+    val animFraction by animateFloatAsState(fraction.coerceIn(0f, 1f), label = "frac")
+
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxWidth().aspectRatio(1f)) {
+            val stroke = size.minDimension * 0.09f
+            val inset = stroke / 2f
+            val arcSize = Size(size.width - stroke, size.height - stroke)
+            val topLeft = Offset(inset, inset)
+            val start = 135f
+            val sweep = 270f
+            drawArc(
+                color = track,
+                startAngle = start,
+                sweepAngle = sweep,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(width = stroke, cap = StrokeCap.Round)
+            )
+            drawArc(
+                color = arcColor,
+                startAngle = start,
+                sweepAngle = sweep * animFraction,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(width = stroke, cap = StrokeCap.Round)
+            )
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = centerValue,
+                fontFamily = NumberFont,
+                fontWeight = FontWeight.Bold,
+                fontSize = 46.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = subLabel,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun PowerButton(on: Boolean, onToggle: () -> Unit) {
+    val bg by animateColorAsState(
+        if (on) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.surfaceVariant,
+        label = "btn-bg"
+    )
+    val fg = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(bg)
+            .clickable { onToggle() }
+            .padding(vertical = 16.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Filled.PowerSettingsNew, contentDescription = null, tint = fg)
+        Spacer(Modifier.size(10.dp))
+        Text(
+            text = if (on) "TURBO ON — TAP TO STOP" else "TURN ON TURBO",
+            color = fg,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp
         )
     }
 }
 
-/** Maps the native outcome + live clock into an honest status label + colour. */
-private fun statusFor(state: TurboState, sample: GpuSample?): Pair<String, androidx.compose.ui.graphics.Color> {
-    if (!state.desiredOn) return "Turbo OFF" to TurboRed.copy(alpha = 0.55f)
+private fun tempAccent(tempC: Float?): Color? = when {
+    tempC == null -> null
+    tempC >= 50f -> TurboRed
+    tempC >= 44f -> TurboAmber
+    else -> TurboGreen
+}
 
+/** Maps the native outcome + live "at max" flag into an honest status + colour. */
+private fun statusFor(state: TurboState, atMax: Boolean): Pair<String, Color> {
+    if (!state.desiredOn) return "Turbo off" to TurboRed.copy(alpha = 0.5f)
     return when (state.outcome) {
-        ApplyOutcome.UNSUPPORTED ->
-            "Not supported on this device" to TurboRed
-        ApplyOutcome.FAILED ->
-            "Failed — kernel rejected the request" to TurboRed
-        ApplyOutcome.APPLIED, ApplyOutcome.NONE -> {
-            when {
-                sample?.isAtMax == true -> "Turbo ACTIVE ✓ verified (clock at max)" to TurboGreen
-                else -> "Applied — waiting for load / verification" to TurboAmber
-            }
-        }
+        ApplyOutcome.UNSUPPORTED -> "Not supported on this device" to TurboRed
+        ApplyOutcome.FAILED -> "Failed — kernel rejected request" to TurboRed
+        ApplyOutcome.APPLIED, ApplyOutcome.NONE ->
+            if (atMax) "Active — verified at max clock" to TurboGreen
+            else "Applied — waiting for load" to TurboAmber
     }
 }

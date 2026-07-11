@@ -1,21 +1,23 @@
 package com.fartopblu.adrenoturbomode.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.fartopblu.adrenoturbomode.R
+import com.fartopblu.adrenoturbomode.core.CpuMonitor
 import com.fartopblu.adrenoturbomode.core.GpuMonitor
 import com.fartopblu.adrenoturbomode.core.NativeBridge
 import com.fartopblu.adrenoturbomode.ui.theme.TurboGreen
@@ -30,45 +32,50 @@ fun InfoScreen(modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text(
-            "About & compatibility",
-            style = MaterialTheme.typography.headlineSmall,
+            "Compatibility",
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold
         )
 
-        // Device support summary
-        val nativeOk = NativeBridge.available
-        val sysfsOk = GpuMonitor.isSupported
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            )
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                .padding(16.dp)
         ) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                CompatRow("Native turbo library loaded", nativeOk)
-                CompatRow("KGSL frequency node readable", sysfsOk)
-                Text(
-                    if (nativeOk && sysfsOk)
-                        "This device exposes the Adreno interfaces turbo relies on."
-                    else
-                        "Some interfaces are missing — turbo may not work here.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            CompatRow("Native turbo library", NativeBridge.available)
+            CompatRow("GPU frequency readable", GpuMonitor.isSupported)
+            CompatRow("CPU frequency readable", CpuMonitor.isSupported)
+            Text(
+                if (NativeBridge.available && GpuMonitor.isSupported)
+                    "This device exposes the Adreno interfaces turbo relies on."
+                else
+                    "Some interfaces are missing — turbo may not work here.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp)
+            )
         }
 
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            )
+        Text(
+            "About",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                .padding(16.dp)
         ) {
             Text(
                 text = context.getString(R.string.about_body),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(16.dp)
+                style = MaterialTheme.typography.bodyMedium
             )
         }
     }
@@ -79,6 +86,7 @@ private fun CompatRow(label: String, ok: Boolean) {
     Text(
         text = (if (ok) "✓  " else "✗  ") + label,
         style = MaterialTheme.typography.bodyMedium,
-        color = if (ok) TurboGreen else TurboRed
+        color = if (ok) TurboGreen else TurboRed,
+        modifier = Modifier.padding(vertical = 3.dp)
     )
 }

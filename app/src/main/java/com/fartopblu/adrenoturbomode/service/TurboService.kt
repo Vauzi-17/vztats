@@ -17,7 +17,10 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.fartopblu.adrenoturbomode.MainActivity
 import com.fartopblu.adrenoturbomode.R
+import com.fartopblu.adrenoturbomode.core.CpuMonitor
+import com.fartopblu.adrenoturbomode.core.CpuSample
 import com.fartopblu.adrenoturbomode.core.GpuMonitor
+import com.fartopblu.adrenoturbomode.core.GpuSample
 import com.fartopblu.adrenoturbomode.core.Prefs
 import com.fartopblu.adrenoturbomode.core.TurboManager
 import kotlinx.coroutines.CoroutineScope
@@ -66,6 +69,7 @@ class TurboService : Service() {
                     if (prefs.desiredTurbo) autoSafetyTripped = false
                     stopIfNothingToDo()
                 }
+                Prefs.KEY_FLOAT_METRICS -> scope.launch(Dispatchers.Main) { overlay?.rebuild() }
             }
         }
 
@@ -83,6 +87,7 @@ class TurboService : Service() {
         prefs.registerListener(prefsListener)
         startAsForeground()
         startAutoSafetyLoop()
+        startStatsLoop()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -192,6 +197,34 @@ class TurboService : Service() {
                     withContext(Dispatchers.Main) { overlay?.refresh() }
                     updateNotification()
                 }
+            }
+        }
+    }
+
+    // --- Live stats for the overlay ------------------------------------------
+
+    private fun startStatsLoop() {
+        scope.launch {
+            var gpuMax = GpuMonitor.maxFreqHz()
+            var cpuMax = CpuMonitor.maxFreqKhz()
+            while (isActive) {
+                delay(1_000L)
+                val ov = overlay
+                if (ov == null || !ov.isShowing) continue
+                if (gpuMax == null) gpuMax = GpuMonitor.maxFreqHz()
+                if (cpuMax == null) cpuMax = CpuMonitor.maxFreqKhz()
+                val gpu = GpuSample(
+                    freqHz = GpuMonitor.currentFreqHz(),
+                    maxFreqHz = gpuMax,
+                    tempMilliC = GpuMonitor.gpuTempMilliC(),
+                    timestampMs = System.currentTimeMillis()
+                )
+                val cpu = CpuSample(
+                    curKhzMax = CpuMonitor.curFreqKhzMax(),
+                    maxKhz = cpuMax,
+                    tempMilliC = CpuMonitor.cpuTempMilliC()
+                )
+                withContext(Dispatchers.Main) { ov.updateStats(gpu, cpu) }
             }
         }
     }

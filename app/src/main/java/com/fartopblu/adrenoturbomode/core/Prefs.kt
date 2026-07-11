@@ -38,6 +38,25 @@ class Prefs private constructor(private val sp: SharedPreferences) {
         get() = sp.getBoolean(KEY_FIRST_RUN, true)
         set(value) = sp.edit().putBoolean(KEY_FIRST_RUN, value).apply()
 
+    // --- Appearance ----------------------------------------------------------
+
+    /** One of "system" | "light" | "dark". */
+    var themeMode: String
+        get() = sp.getString(KEY_THEME, THEME_SYSTEM) ?: THEME_SYSTEM
+        set(value) = sp.edit().putString(KEY_THEME, value).apply()
+
+    /** Use Material You wallpaper colours instead of the custom palette. */
+    var dynamicColor: Boolean
+        get() = sp.getBoolean(KEY_DYNAMIC, false)
+        set(value) = sp.edit().putBoolean(KEY_DYNAMIC, value).apply()
+
+    // --- Floating window customisation ---------------------------------------
+
+    /** Which metrics the floating panel shows, as a set of METRIC_* keys. */
+    var floatingMetrics: Set<String>
+        get() = sp.getStringSet(KEY_FLOAT_METRICS, DEFAULT_METRICS)?.toSet() ?: DEFAULT_METRICS
+        set(value) = sp.edit().putStringSet(KEY_FLOAT_METRICS, value).apply()
+
     fun registerListener(l: SharedPreferences.OnSharedPreferenceChangeListener) =
         sp.registerOnSharedPreferenceChangeListener(l)
 
@@ -52,9 +71,25 @@ class Prefs private constructor(private val sp: SharedPreferences) {
         const val KEY_TEMP_LIMIT = "temp_limit_c"
         const val KEY_BATT_LIMIT = "battery_limit_pct"
         const val KEY_FIRST_RUN = "first_run"
+        const val KEY_THEME = "theme_mode"
+        const val KEY_DYNAMIC = "dynamic_color"
+        const val KEY_FLOAT_METRICS = "floating_metrics"
 
         const val DEFAULT_TEMP_LIMIT = 48
         const val DEFAULT_BATT_LIMIT = 15
+
+        const val THEME_SYSTEM = "system"
+        const val THEME_LIGHT = "light"
+        const val THEME_DARK = "dark"
+
+        // Floating-panel metric keys.
+        const val METRIC_GPU_FREQ = "gpu_freq"
+        const val METRIC_GPU_TEMP = "gpu_temp"
+        const val METRIC_CPU_FREQ = "cpu_freq"
+        const val METRIC_CPU_TEMP = "cpu_temp"
+
+        val DEFAULT_METRICS: Set<String> =
+            setOf(METRIC_GPU_FREQ, METRIC_GPU_TEMP, METRIC_CPU_FREQ)
 
         @Volatile
         private var instance: Prefs? = null
