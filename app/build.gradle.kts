@@ -17,8 +17,8 @@ android {
         // <= targetSdk, and a lower minSdk also supports more old devices.
         minSdk = 25
         targetSdk = 25
-        versionCode = 16
-        versionName = "2.3"
+        versionCode = 17
+        versionName = "2.4"
 
         ndk {
             abiFilters += "arm64-v8a"
@@ -58,6 +58,8 @@ android {
 
     buildFeatures {
         compose = true
+        aidl = true
+        buildConfig = true
     }
 
     externalNativeBuild {
@@ -82,4 +84,8 @@ dependencies {
     implementation("androidx.compose.foundation:foundation:1.9.0")
     implementation("androidx.compose.material3:material3:1.3.0")
     implementation("androidx.compose.material:material-icons-extended:1.7.0")
+
+    // Shizuku — run shell-privileged commands (SurfaceFlinger FPS) without root.
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
 }

@@ -23,8 +23,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vauzi.clocklock.core.Prefs
 import com.vauzi.clocklock.service.TurboService
+import com.vauzi.clocklock.shizuku.FpsSampler
 import com.vauzi.clocklock.ui.theme.ThemeMode
 
 private data class Metric(val key: String, val label: String)
@@ -183,6 +185,25 @@ fun SettingsScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 2.dp)
+        )
+
+        // --- FPS (Shizuku) ---------------------------------------------------
+        SectionHeader("Frame rate (Shizuku)")
+        val fpsState by FpsSampler.state.collectAsStateWithLifecycle()
+        val fpsMsg by FpsSampler.message.collectAsStateWithLifecycle()
+        SettingSwitch(
+            title = "Real FPS via Shizuku",
+            description = "Reads true per-game FPS from SurfaceFlinger. Needs Shizuku running " +
+                "(start it once via wireless debugging — no PC, no root).",
+            checked = fpsState == FpsSampler.State.RUNNING || fpsState == FpsSampler.State.STARTING,
+            onCheckedChange = { want ->
+                if (want) FpsSampler.enable(context) else FpsSampler.disable()
+            }
+        )
+        Text(
+            fpsMsg,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         // --- Behaviour -------------------------------------------------------
