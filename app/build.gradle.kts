@@ -11,10 +11,14 @@ android {
 
     defaultConfig {
         applicationId = "com.fartopblu.adrenoturbomode"
-        minSdk = 29
-        targetSdk = 34
-        versionCode = 12
-        versionName = "2.0"
+        // targetSdk is intentionally kept at 25 (matching the original app): a
+        // higher targetSdk moves the app into a stricter SELinux domain that is
+        // denied read access to /sys/class/kgsl (GPU frequency). minSdk must be
+        // <= targetSdk, and a lower minSdk also supports more old devices.
+        minSdk = 25
+        targetSdk = 25
+        versionCode = 13
+        versionName = "2.0.1"
 
         ndk {
             abiFilters += "arm64-v8a"

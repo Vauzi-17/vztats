@@ -46,7 +46,13 @@ system files are modified, so no root is required.
 ## Building
 
 Requires the Android SDK, an Adreno-capable NDK (arm64), and JDK 17–21.
-minSdk 29, targetSdk 34.
+compileSdk 36, minSdk 25, **targetSdk 25**.
+
+> targetSdk is deliberately kept at 25. A higher targetSdk moves the app into a
+> stricter SELinux domain that is denied read access to `/sys/class/kgsl`, which
+> breaks the GPU-frequency readout (the turbo ioctl itself keeps working because
+> `/dev/kgsl-3d0` is a device node, not sysfs). This is why the app is not
+> Play Store compliant and is meant for sideloading.
 
 ```
 ./gradlew assembleDebug

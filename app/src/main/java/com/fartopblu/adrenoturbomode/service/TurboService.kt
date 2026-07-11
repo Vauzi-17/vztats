@@ -147,6 +147,8 @@ class TurboService : Service() {
     }
 
     private fun createChannel() {
+        // Notification channels only exist on API 26+.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = getSystemService(NotificationManager::class.java)
         val channel = NotificationChannel(
             CHANNEL_ID,
@@ -223,7 +225,13 @@ class TurboService : Service() {
             val shouldRun = prefs.desiredTurbo || prefs.overlayEnabled
             val intent = Intent(context, TurboService::class.java)
             if (!shouldRun) intent.action = ACTION_STOP
-            runCatching { context.startForegroundService(intent) }
+            runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            }
         }
     }
 }
