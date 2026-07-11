@@ -63,8 +63,9 @@ bool adrenotools_validate_gpu_mapping(void *handle);
 
 /**
  * @brief Provides a way to force the GPU to run at the maximum possible clocks (thermal constraints will still be applied)
+ * @return True if the KGSL device was opened and the SETPROPERTY ioctl succeeded, false otherwise
  */
-void adrenotools_set_turbo(bool turbo);
+bool adrenotools_set_turbo(bool turbo);
 
 #ifdef __cplusplus
 }

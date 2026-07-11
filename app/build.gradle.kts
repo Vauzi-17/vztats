@@ -1,37 +1,29 @@
-
-
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
     namespace = "com.fartopblu.adrenoturbomode"
-    compileSdk = 34
-
-
+    compileSdk = 36
+    buildToolsVersion = "36.1.0"
 
     defaultConfig {
         applicationId = "com.fartopblu.adrenoturbomode"
-        minSdk = 25
-        targetSdk = 25
-        versionCode = 11
-        versionName = "1.1"
+        minSdk = 29
+        targetSdk = 34
+        versionCode = 12
+        versionName = "2.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        externalNativeBuild {
-            cmake {
-                // cppFlags += "-std=c++11"
-            }
-        }
         ndk {
-            abiFilters.addAll(arrayOf("arm64-v8a"))
+            abiFilters += "arm64-v8a"
         }
     }
 
+    ndkVersion = "27.0.12077973"
+
     packaging {
-        dex {
-            useLegacyPackaging = true
-        }
         jniLibs {
             useLegacyPackaging = true
         }
@@ -50,14 +42,20 @@ android {
             isDebuggable = true
         }
     }
+
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
     buildFeatures {
-        prefab = true
-        viewBinding = true
+        compose = true
     }
+
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
@@ -66,11 +64,18 @@ android {
     }
 }
 
+// Versions are pinned to what is already resolved in the local Gradle cache so
+// the project builds without pulling a Compose BOM or the Material Components
+// (View) library over the network.
 dependencies {
+    implementation("androidx.core:core-ktx:1.17.0")
+    implementation("androidx.activity:activity-compose:1.11.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
 
-    implementation("androidx.core:core:1.13.1")
-    implementation("androidx.appcompat:appcompat:1.7.0")
-    implementation("com.google.android.material:material:1.12.0")
-    implementation("androidx.annotation:annotation:1.8.0")
-    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+    implementation("androidx.compose.runtime:runtime:1.9.4")
+    implementation("androidx.compose.ui:ui:1.9.0")
+    implementation("androidx.compose.ui:ui-graphics:1.9.0")
+    implementation("androidx.compose.foundation:foundation:1.9.0")
+    implementation("androidx.compose.material3:material3:1.3.0")
+    implementation("androidx.compose.material:material-icons-extended:1.7.0")
 }

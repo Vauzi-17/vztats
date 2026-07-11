@@ -1,6 +1,8 @@
 <resources>
-    <string name="enable">Enable Turbo</string>
-    <string name="disable">Disable Turbo</string>
-    <string name="about_btn">YOU MUST READ THIS!</string>
-    <string name="about">This application activates Turbo mode, which can lock the maximum GPU frequency. You should be aware of the following:\n\n1. Turbo mode only works on Adreno GPUs.\n2. The application does not require ADB or ROOT access.\n3. Locking the maximum GPU frequency may increase device heating ⚠️\n4. Turbo mode may not work on some devices.\n5. On some devices, Turbo mode may turn off if the GPU is not under load. In this case, enable Turbo through the floating window while the game is running.\n6. On some devices, if Turbo is enabled, after locking the screen the GPU may get stuck at a low frequency. To fix this, restart the device.\n\nCreated by Fartopblu\nhttps://github.com/Fartopblu/AdrenoGPU-Turbo-Mode\n\nUsed libadrenotools\nhttps://github.com/bylaws/libadrenotools/</string>
+    <string name="app_name">Adreno GPU Turbo</string>
+
+    <string name="turbo_channel_name">GPU Turbo status</string>
+    <string name="turbo_channel_desc">Persistent notification while the turbo keep-alive service is running.</string>
+
+    <string name="about_body">This application activates Turbo mode on Adreno GPUs, which locks the maximum GPU frequency by disabling the driver\'s dynamic clock scaling (DCVS).\n\n1. Turbo mode only works on Adreno (Qualcomm/KGSL) GPUs.\n2. The application does not require ADB or ROOT access.\n3. Locking the maximum GPU frequency may increase device heating and battery drain.\n4. Turbo mode may not work on every device. If the status shows \"applied but not verified\", the kernel may have ignored the request.\n5. On some devices turbo turns off when the GPU is idle. Use the floating toggle while a game is running.\n6. On some devices the GPU may get stuck at a low frequency after locking the screen. The keep-alive service tries to re-apply turbo automatically on unlock.\n\nOriginal app by Fartopblu — https://github.com/Fartopblu/AdrenoGPU-Turbo-Mode\nUses libadrenotools by Billy Laws — https://github.com/bylaws/libadrenotools</string>
 </resources>
