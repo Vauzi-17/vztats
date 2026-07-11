@@ -235,16 +235,15 @@ class OverlayController(private val context: Context) {
         }
         dot = d
 
-        // Row 1: the always-visible stats.
-        val row = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+        // Row 1: the always-visible stats. FlowLayout wraps to a new line when
+        // there are too many metrics to fit the screen width.
+        val row = FlowLayout(context).apply {
+            horizontalGap = dp(12f)
+            verticalGap = dp(6f)
+            maxWidthPx = context.resources.displayMetrics.widthPixels - dp(28f)
             addView(d)
         }
-        val metrics = orderedMetrics()
-        metrics.forEachIndexed { i, key ->
-            row.addView(horizontalCell(key, last = i == metrics.lastIndex))
-        }
+        orderedMetrics().forEach { key -> row.addView(horizontalCell(key)) }
 
         // Outer column so the toggle + close controls sit on their own line and
         // never get pushed off-screen no matter how many metrics are shown.
@@ -266,7 +265,7 @@ class OverlayController(private val context: Context) {
         addView(closeChip())
     }
 
-    private fun horizontalCell(key: String, last: Boolean): LinearLayout {
+    private fun horizontalCell(key: String): LinearLayout {
         val value = TextView(context).apply {
             setTextColor(TEXT)
             textSize = 14f * scale
@@ -285,7 +284,6 @@ class OverlayController(private val context: Context) {
         return LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(0, 0, if (last) 0 else dp(14f), 0)
             addView(value); addView(label)
         }
     }

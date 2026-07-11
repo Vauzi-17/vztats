@@ -199,40 +199,59 @@ object FpsSampler {
     private var cachedLayer: String? = null
 
     private fun measureFps(svc: IUserService): Int? {
-        var layer = cachedLayer?.takeIf { it.isNotBlank() }
-        if (layer == null) {
-            layer = detectLayer(svc)
-            cachedLayer = layer
+        cachedLayer?.let { c ->
+            parseLatency(svc.exec("dumpsys SurfaceFlinger --latency \"$c\""))?.let {
+                _message.value = "Measuring FPS…"
+                return it
+            }
+            cachedLayer = null
         }
-        if (layer.isNullOrBlank()) return null
 
-        var fps = parseLatency(svc.exec("dumpsys SurfaceFlinger --latency \"$layer\""))
-        if (fps == null) {
-            // Layer may have changed (rotation / new activity) — re-detect once.
-            layer = detectLayer(svc)
-            cachedLayer = layer
-            if (!layer.isNullOrBlank()) {
-                fps = parseLatency(svc.exec("dumpsys SurfaceFlinger --latency \"$layer\""))
+        val candidates = detectLayerCandidates(svc)
+        for (name in candidates) {
+            val fps = parseLatency(svc.exec("dumpsys SurfaceFlinger --latency \"$name\""))
+            if (fps != null) {
+                cachedLayer = name
+                _message.value = "Measuring FPS…"
+                return fps
             }
         }
-        return fps
+
+        _message.value = if (candidates.isEmpty())
+            "FPS: no game surface focused yet."
+        else
+            "FPS: layer found but no frame data. Try Winlator's OpenGL/Vulkan mode."
+        return null
     }
 
-    /** Finds the SurfaceFlinger layer of the currently focused app. */
-    private fun detectLayer(svc: IUserService): String? {
+    /**
+     * Builds candidate SurfaceFlinger layer names for the focused app. The modern
+     * `--list` wraps names as `RequestedLayerState{<name> <ts>#<id> ...}`, so we
+     * strip the wrapper/metadata and also try the name without the handle prefix
+     * and without the (BLAST) suffix, since `--latency` matching varies.
+     */
+    private fun detectLayerCandidates(svc: IUserService): List<String> {
         val focus = svc.exec("dumpsys window 2>/dev/null | grep -E 'mCurrentFocus|mFocusedApp'")
         val pkg = Regex("([a-zA-Z0-9_.]+)/[a-zA-Z0-9_.]+").find(focus)?.groupValues?.getOrNull(1)
-            ?: return null
 
-        val layers = svc.exec("dumpsys SurfaceFlinger --list").lineSequence()
-            .map { it.trim() }
-            .filter { it.contains(pkg) }
-            .filterNot { it.startsWith("Background") || it.contains("ColorLayer") }
-            .toList()
+        val out = LinkedHashSet<String>()
+        svc.exec("dumpsys SurfaceFlinger --list").lineSequence().forEach { raw ->
+            val line = raw.trim()
+            if (!line.contains("SurfaceView[")) return@forEach
+            if (pkg != null && !line.contains(pkg)) return@forEach
 
-        // Prefer the app's main SurfaceView / BLAST buffer layer.
-        return layers.firstOrNull { it.contains("SurfaceView", ignoreCase = true) }
-            ?: layers.lastOrNull()
+            val inner = Regex("""RequestedLayerState\{(.+)}""").find(line)?.groupValues?.get(1) ?: line
+            val name = inner
+                .replace(Regex("""\s+\d\d-\d\d \d\d:\d\d:\d\d\.\d+#\d+.*$"""), "")
+                .trim()
+            if (name.isBlank() || name.startsWith("Background")) return@forEach
+
+            out.add(name)
+            val noHandle = name.replace(Regex("^[0-9a-fA-F]+\\s+"), "")
+            out.add(noHandle)
+            out.add(noHandle.replace("(BLAST)", "").trim())
+        }
+        return out.toList()
     }
 
     /**
