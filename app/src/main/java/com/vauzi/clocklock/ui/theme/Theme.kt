@@ -1,4 +1,4 @@
-package com.fartopblu.adrenoturbomode.ui.theme
+package com.vauzi.clocklock.ui.theme
 
 import android.app.Activity
 import android.os.Build

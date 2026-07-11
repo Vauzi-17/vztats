@@ -1,4 +1,4 @@
-package com.fartopblu.adrenoturbomode.core
+package com.vauzi.clocklock.core
 
 /**
  * Thin JNI wrapper around libadrenotools' `adrenotools_set_turbo`.

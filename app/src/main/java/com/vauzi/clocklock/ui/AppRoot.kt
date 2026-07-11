@@ -1,4 +1,4 @@
-package com.fartopblu.adrenoturbomode.ui
+package com.vauzi.clocklock.ui
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -27,10 +27,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.fartopblu.adrenoturbomode.core.SystemMonitor
-import com.fartopblu.adrenoturbomode.core.SystemSample
-import com.fartopblu.adrenoturbomode.core.TurboManager
-import com.fartopblu.adrenoturbomode.ui.theme.ThemeMode
+import com.vauzi.clocklock.core.SystemMonitor
+import com.vauzi.clocklock.core.SystemSample
+import com.vauzi.clocklock.core.TurboManager
+import com.vauzi.clocklock.ui.theme.ThemeMode
 
 private enum class Dest(val label: String, val icon: ImageVector) {
     CONTROL("Control", Icons.Filled.Bolt),

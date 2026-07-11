@@ -1,4 +1,4 @@
-package com.fartopblu.adrenoturbomode.core
+package com.vauzi.clocklock.core
 
 import java.io.File
 import java.util.Locale

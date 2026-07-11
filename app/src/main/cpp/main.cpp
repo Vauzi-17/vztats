@@ -6,11 +6,11 @@
 // layer distinguish "applied" from "silently ignored / unsupported device".
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_fartopblu_adrenoturbomode_core_NativeBridge_enableTurbo(JNIEnv*, jobject) {
+Java_com_vauzi_clocklock_core_NativeBridge_enableTurbo(JNIEnv*, jobject) {
     return adrenotools_set_turbo(true) ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_fartopblu_adrenoturbomode_core_NativeBridge_disableTurbo(JNIEnv*, jobject) {
+Java_com_vauzi_clocklock_core_NativeBridge_disableTurbo(JNIEnv*, jobject) {
     return adrenotools_set_turbo(false) ? JNI_TRUE : JNI_FALSE;
 }

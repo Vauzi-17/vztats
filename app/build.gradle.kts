@@ -5,20 +5,20 @@ plugins {
 }
 
 android {
-    namespace = "com.fartopblu.adrenoturbomode"
+    namespace = "com.vauzi.clocklock"
     compileSdk = 36
     buildToolsVersion = "36.1.0"
 
     defaultConfig {
-        applicationId = "com.fartopblu.adrenoturbomode"
+        applicationId = "com.vauzi.clocklock"
         // targetSdk is intentionally kept at 25 (matching the original app): a
         // higher targetSdk moves the app into a stricter SELinux domain that is
         // denied read access to /sys/class/kgsl (GPU frequency). minSdk must be
         // <= targetSdk, and a lower minSdk also supports more old devices.
         minSdk = 25
         targetSdk = 25
-        versionCode = 13
-        versionName = "2.0.1"
+        versionCode = 14
+        versionName = "2.1"
 
         ndk {
             abiFilters += "arm64-v8a"

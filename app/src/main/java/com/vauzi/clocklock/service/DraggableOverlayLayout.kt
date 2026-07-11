@@ -1,4 +1,4 @@
-package com.fartopblu.adrenoturbomode.service
+package com.vauzi.clocklock.service
 
 import android.annotation.SuppressLint
 import android.content.Context

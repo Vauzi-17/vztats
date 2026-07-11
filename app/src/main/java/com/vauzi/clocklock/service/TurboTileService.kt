@@ -1,14 +1,14 @@
-package com.fartopblu.adrenoturbomode.service
+package com.vauzi.clocklock.service
 
 import android.content.ComponentName
 import android.content.Context
 import android.graphics.drawable.Icon
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
-import com.fartopblu.adrenoturbomode.R
-import com.fartopblu.adrenoturbomode.core.GpuMonitor
-import com.fartopblu.adrenoturbomode.core.NativeBridge
-import com.fartopblu.adrenoturbomode.core.TurboManager
+import com.vauzi.clocklock.R
+import com.vauzi.clocklock.core.GpuMonitor
+import com.vauzi.clocklock.core.NativeBridge
+import com.vauzi.clocklock.core.TurboManager
 
 /** Quick Settings tile to toggle turbo without opening the app. */
 class TurboTileService : TileService() {

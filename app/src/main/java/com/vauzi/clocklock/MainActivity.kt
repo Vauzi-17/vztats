@@ -1,4 +1,4 @@
-package com.fartopblu.adrenoturbomode
+package com.vauzi.clocklock
 
 import android.Manifest
 import android.content.Intent
@@ -16,11 +16,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
-import com.fartopblu.adrenoturbomode.core.Prefs
-import com.fartopblu.adrenoturbomode.core.TurboManager
-import com.fartopblu.adrenoturbomode.ui.AppRoot
-import com.fartopblu.adrenoturbomode.ui.theme.AdrenoTurboTheme
-import com.fartopblu.adrenoturbomode.ui.theme.ThemeMode
+import com.vauzi.clocklock.core.Prefs
+import com.vauzi.clocklock.core.TurboManager
+import com.vauzi.clocklock.ui.AppRoot
+import com.vauzi.clocklock.ui.theme.AdrenoTurboTheme
+import com.vauzi.clocklock.ui.theme.ThemeMode
 
 class MainActivity : ComponentActivity() {
 

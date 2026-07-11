@@ -1,4 +1,4 @@
-package com.fartopblu.adrenoturbomode.ui
+package com.vauzi.clocklock.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -17,10 +17,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.fartopblu.adrenoturbomode.core.SystemSample
-import com.fartopblu.adrenoturbomode.ui.theme.TurboAmber
-import com.fartopblu.adrenoturbomode.ui.theme.TurboGreen
-import com.fartopblu.adrenoturbomode.ui.theme.TurboRed
+import com.vauzi.clocklock.core.SystemSample
+import com.vauzi.clocklock.ui.theme.TurboAmber
+import com.vauzi.clocklock.ui.theme.TurboGreen
+import com.vauzi.clocklock.ui.theme.TurboRed
 
 @Composable
 fun MonitorScreen(

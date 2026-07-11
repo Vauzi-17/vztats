@@ -1,4 +1,4 @@
-package com.fartopblu.adrenoturbomode.ui.theme
+package com.vauzi.clocklock.ui.theme
 
 import androidx.compose.material3.Typography
 

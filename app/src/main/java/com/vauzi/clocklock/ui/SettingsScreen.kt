@@ -1,4 +1,4 @@
-package com.fartopblu.adrenoturbomode.ui
+package com.vauzi.clocklock.ui
 
 import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
@@ -23,9 +23,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.fartopblu.adrenoturbomode.core.Prefs
-import com.fartopblu.adrenoturbomode.service.TurboService
-import com.fartopblu.adrenoturbomode.ui.theme.ThemeMode
+import com.vauzi.clocklock.core.Prefs
+import com.vauzi.clocklock.service.TurboService
+import com.vauzi.clocklock.ui.theme.ThemeMode
 
 private data class Metric(val key: String, val label: String)
 
@@ -55,6 +55,9 @@ fun SettingsScreen(
     var tempLimit by remember { mutableIntStateOf(prefs.tempLimitC) }
     var battLimit by remember { mutableIntStateOf(prefs.batteryLimitPct) }
     val metrics = remember { mutableStateListOf<String>().apply { addAll(prefs.floatingMetrics) } }
+    var floatMode by remember { mutableStateOf(prefs.floatingMode) }
+    var opacity by remember { mutableIntStateOf(prefs.floatingOpacity) }
+    var floatSize by remember { mutableIntStateOf(prefs.floatingSize) }
 
     Column(
         modifier
@@ -135,6 +138,48 @@ fun SettingsScreen(
                 Text(m.label, style = MaterialTheme.typography.bodyLarge)
             }
         }
+
+        Text(
+            "Layout",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+        SegmentedControl(
+            options = listOf("Compact", "Horizontal", "Vertical"),
+            selectedIndex = when (floatMode) {
+                Prefs.MODE_COMPACT -> 0
+                Prefs.MODE_VERTICAL -> 2
+                else -> 1
+            },
+            onSelect = {
+                floatMode = when (it) {
+                    0 -> Prefs.MODE_COMPACT
+                    2 -> Prefs.MODE_VERTICAL
+                    else -> Prefs.MODE_HORIZONTAL
+                }
+                prefs.floatingMode = floatMode
+            },
+            modifier = Modifier.padding(vertical = 8.dp)
+        )
+        LimitSlider(
+            label = "Opacity: $opacity%",
+            value = opacity.toFloat(),
+            range = 20f..100f,
+            onChange = { opacity = it.toInt(); prefs.floatingOpacity = opacity }
+        )
+        LimitSlider(
+            label = "Size: $floatSize%",
+            value = floatSize.toFloat(),
+            range = 80f..140f,
+            onChange = { floatSize = it.toInt(); prefs.floatingSize = floatSize }
+        )
+        Text(
+            "In Horizontal/Vertical, tap the panel to reveal the ON/OFF button, × to hide it.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp)
+        )
 
         // --- Behaviour -------------------------------------------------------
         SectionHeader("Behaviour")

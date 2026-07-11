@@ -1,4 +1,4 @@
-package com.fartopblu.adrenoturbomode.service
+package com.vauzi.clocklock.service
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -15,14 +15,14 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import com.fartopblu.adrenoturbomode.MainActivity
-import com.fartopblu.adrenoturbomode.R
-import com.fartopblu.adrenoturbomode.core.CpuMonitor
-import com.fartopblu.adrenoturbomode.core.CpuSample
-import com.fartopblu.adrenoturbomode.core.GpuMonitor
-import com.fartopblu.adrenoturbomode.core.GpuSample
-import com.fartopblu.adrenoturbomode.core.Prefs
-import com.fartopblu.adrenoturbomode.core.TurboManager
+import com.vauzi.clocklock.MainActivity
+import com.vauzi.clocklock.R
+import com.vauzi.clocklock.core.CpuMonitor
+import com.vauzi.clocklock.core.CpuSample
+import com.vauzi.clocklock.core.GpuMonitor
+import com.vauzi.clocklock.core.GpuSample
+import com.vauzi.clocklock.core.Prefs
+import com.vauzi.clocklock.core.TurboManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -69,7 +69,11 @@ class TurboService : Service() {
                     if (prefs.desiredTurbo) autoSafetyTripped = false
                     stopIfNothingToDo()
                 }
-                Prefs.KEY_FLOAT_METRICS -> scope.launch(Dispatchers.Main) { overlay?.rebuild() }
+                Prefs.KEY_FLOAT_METRICS,
+                Prefs.KEY_FLOAT_MODE,
+                Prefs.KEY_FLOAT_OPACITY,
+                Prefs.KEY_FLOAT_SIZE ->
+                    scope.launch(Dispatchers.Main) { overlay?.rebuild() }
             }
         }
 
@@ -143,7 +147,7 @@ class TurboService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_turbo)
-            .setContentTitle("Adreno GPU Turbo")
+            .setContentTitle("Adreno Clock Lock")
             .setContentText(content)
             .setOngoing(true)
             .setContentIntent(open)
@@ -243,7 +247,7 @@ class TurboService : Service() {
     companion object {
         private const val CHANNEL_ID = "turbo_status"
         private const val NOTIF_ID = 42
-        const val ACTION_STOP = "com.fartopblu.adrenoturbomode.STOP"
+        const val ACTION_STOP = "com.vauzi.clocklock.STOP"
 
         /**
          * Starts the service if there is a reason to run, stops it otherwise.

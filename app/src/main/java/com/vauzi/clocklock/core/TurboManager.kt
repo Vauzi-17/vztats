@@ -1,8 +1,8 @@
-package com.fartopblu.adrenoturbomode.core
+package com.vauzi.clocklock.core
 
 import android.content.Context
-import com.fartopblu.adrenoturbomode.service.TurboService
-import com.fartopblu.adrenoturbomode.service.TurboTileService
+import com.vauzi.clocklock.service.TurboService
+import com.vauzi.clocklock.service.TurboTileService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

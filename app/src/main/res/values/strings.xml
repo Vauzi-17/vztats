@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Adreno GPU Turbo</string>
+    <string name="app_name">Adreno Clock Lock</string>
 
     <string name="turbo_channel_name">GPU Turbo status</string>
     <string name="turbo_channel_desc">Persistent notification while the turbo keep-alive service is running.</string>

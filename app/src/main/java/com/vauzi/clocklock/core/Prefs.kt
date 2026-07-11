@@ -1,4 +1,4 @@
-package com.fartopblu.adrenoturbomode.core
+package com.vauzi.clocklock.core
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -57,6 +57,21 @@ class Prefs private constructor(private val sp: SharedPreferences) {
         get() = sp.getStringSet(KEY_FLOAT_METRICS, DEFAULT_METRICS)?.toSet() ?: DEFAULT_METRICS
         set(value) = sp.edit().putStringSet(KEY_FLOAT_METRICS, value).apply()
 
+    /** Layout of the floating panel: "compact" | "horizontal" | "vertical". */
+    var floatingMode: String
+        get() = sp.getString(KEY_FLOAT_MODE, MODE_HORIZONTAL) ?: MODE_HORIZONTAL
+        set(value) = sp.edit().putString(KEY_FLOAT_MODE, value).apply()
+
+    /** Overall opacity of the floating panel, 40..100 (%). */
+    var floatingOpacity: Int
+        get() = sp.getInt(KEY_FLOAT_OPACITY, DEFAULT_OPACITY)
+        set(value) = sp.edit().putInt(KEY_FLOAT_OPACITY, value).apply()
+
+    /** Scale of the floating panel, 80..140 (%). */
+    var floatingSize: Int
+        get() = sp.getInt(KEY_FLOAT_SIZE, DEFAULT_SIZE)
+        set(value) = sp.edit().putInt(KEY_FLOAT_SIZE, value).apply()
+
     fun registerListener(l: SharedPreferences.OnSharedPreferenceChangeListener) =
         sp.registerOnSharedPreferenceChangeListener(l)
 
@@ -74,9 +89,18 @@ class Prefs private constructor(private val sp: SharedPreferences) {
         const val KEY_THEME = "theme_mode"
         const val KEY_DYNAMIC = "dynamic_color"
         const val KEY_FLOAT_METRICS = "floating_metrics"
+        const val KEY_FLOAT_MODE = "floating_mode"
+        const val KEY_FLOAT_OPACITY = "floating_opacity"
+        const val KEY_FLOAT_SIZE = "floating_size"
 
         const val DEFAULT_TEMP_LIMIT = 48
         const val DEFAULT_BATT_LIMIT = 15
+        const val DEFAULT_OPACITY = 90
+        const val DEFAULT_SIZE = 100
+
+        const val MODE_COMPACT = "compact"
+        const val MODE_HORIZONTAL = "horizontal"
+        const val MODE_VERTICAL = "vertical"
 
         const val THEME_SYSTEM = "system"
         const val THEME_LIGHT = "light"

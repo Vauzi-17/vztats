@@ -1,4 +1,4 @@
-package com.fartopblu.adrenoturbomode.core
+package com.vauzi.clocklock.core
 
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow

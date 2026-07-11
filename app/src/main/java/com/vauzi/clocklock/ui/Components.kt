@@ -1,4 +1,4 @@
-package com.fartopblu.adrenoturbomode.ui
+package com.vauzi.clocklock.ui
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
