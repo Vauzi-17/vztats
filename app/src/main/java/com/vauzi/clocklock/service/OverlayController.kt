@@ -230,26 +230,35 @@ class OverlayController(private val context: Context) {
         }
         dot = d
 
-        val bar = LinearLayout(context).apply {
+        // Row 1: the always-visible stats.
+        val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = roundedFill(SURFACE, dp(16f), STROKE)
-            setPadding(dp(13f), dp(8f), dp(13f), dp(8f))
             addView(d)
         }
-
         val metrics = orderedMetrics()
         metrics.forEachIndexed { i, key ->
-            bar.addView(horizontalCell(key, last = i == metrics.lastIndex))
+            row.addView(horizontalCell(key, last = i == metrics.lastIndex))
         }
 
-        if (showButton) {
-            bar.addView(divider())
-            bar.addView(toggleButton(topMargin = 0, compactChip = true))
-            bar.addView(closeChip())
+        // Outer column so the toggle + close controls sit on their own line and
+        // never get pushed off-screen no matter how many metrics are shown.
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            background = roundedFill(SURFACE, dp(16f), STROKE)
+            setPadding(dp(13f), dp(8f), dp(13f), dp(8f))
+            addView(row)
+            if (showButton) addView(controlRow())
+            setOnClickListener { if (!showButton) { showButton = true; rebuild() } }
         }
-        bar.setOnClickListener { if (!showButton) { showButton = true; rebuild() } }
-        return bar
+    }
+
+    private fun controlRow(): LinearLayout = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(0, dp(8f), 0, dp(1f))
+        addView(toggleButton(topMargin = 0, compactChip = true))
+        addView(closeChip())
     }
 
     private fun horizontalCell(key: String, last: Boolean): LinearLayout {
@@ -332,13 +341,6 @@ class OverlayController(private val context: Context) {
         textSize = 16f * scale
         setPadding(dp(10f), 0, dp(2f), 0)
         setOnClickListener { showButton = false; rebuild() }
-    }
-
-    private fun divider(): View = View(context).apply {
-        layoutParams = LinearLayout.LayoutParams(dp(1f), dp(20f)).apply {
-            leftMargin = dp(10f); rightMargin = dp(8f)
-        }
-        setBackgroundColor(STROKE)
     }
 
     // --- metric helpers -------------------------------------------------------
