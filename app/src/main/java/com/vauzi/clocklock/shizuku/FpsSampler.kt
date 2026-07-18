@@ -89,7 +89,7 @@ object FpsSampler {
     private fun onBinderDead() {
         stopLoop()
         service = null
-        cachedLayer = null
+        lastFps = 0
         FpsProbe.update(null)
         val stillWanted = appContext?.let { Prefs.get(it).fpsEnabled } == true
         if (stillWanted) set(State.UNAVAILABLE, "Shizuku stopped — restart it to resume FPS.")
@@ -121,9 +121,11 @@ object FpsSampler {
 
     fun disable() {
         appContext?.let { Prefs.get(it).fpsEnabled = false }
+        runCatching { service?.exec("dumpsys SurfaceFlinger --timestats -disable -clear") }
         stopLoop()
         unbind()
         FpsProbe.setActive(false)
+        lastFps = 0
         set(State.UNAVAILABLE, "Shizuku FPS is off.")
     }
 
@@ -175,15 +177,13 @@ object FpsSampler {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         loopScope = scope
         FpsProbe.setActive(true)
+        lastFps = 0
         scope.launch {
+            runCatching { service?.exec("dumpsys SurfaceFlinger --timestats -clear -enable") }
             while (isActive) {
                 val svc = service
-                if (svc == null) {
-                    FpsProbe.update(null)
-                } else {
-                    val fps = runCatching { measureFps(svc) }.getOrNull()
-                    FpsProbe.update(fps)
-                }
+                if (svc == null) FpsProbe.update(null)
+                else FpsProbe.update(runCatching { measureFps(svc) }.getOrNull())
                 delay(1000)
             }
         }
@@ -194,92 +194,30 @@ object FpsSampler {
         loopScope = null
     }
 
-    // --- FPS measurement ------------------------------------------------------
+    // --- FPS measurement (SurfaceFlinger --timestats) -------------------------
+    // Matches how open-source Shizuku FPS meters work (e.g. FrameX-Android): read
+    // the global averageFPS from SurfaceFlinger's timestats. This is the accurate
+    // method on Android 12+/14 and needs no per-game layer detection, so it works
+    // for any game — native Android or Winlator, whatever the render backend.
 
-    private var cachedLayer: String? = null
+    private var lastFps = 0
+    private val fpsRegex = Regex("averageFPS\\s*=\\s*([0-9.]+)")
 
-    private fun measureFps(svc: IUserService): Int? {
-        cachedLayer?.let { c ->
-            parseLatency(svc.exec("dumpsys SurfaceFlinger --latency \"$c\""))?.let {
-                _message.value = "Measuring FPS…"
-                return it
-            }
-            cachedLayer = null
+    private fun measureFps(svc: IUserService): Int {
+        // Clear+re-enable during the first second of each 3s cycle so averageFPS
+        // reflects a fresh ~2s window instead of a long drifting average.
+        if (System.currentTimeMillis() % 3000L < 1000L) {
+            svc.exec("dumpsys SurfaceFlinger --timestats -clear -enable")
         }
-
-        val candidates = detectLayerCandidates(svc)
-        for (name in candidates) {
-            val fps = parseLatency(svc.exec("dumpsys SurfaceFlinger --latency \"$name\""))
-            if (fps != null) {
-                cachedLayer = name
-                _message.value = "Measuring FPS…"
-                return fps
-            }
+        val dump = svc.exec("dumpsys SurfaceFlinger --timestats -dump")
+        val fps = fpsRegex.find(dump)?.groupValues?.get(1)?.toFloatOrNull()?.toInt() ?: 0
+        if (fps > 0) {
+            lastFps = fps
+            _message.value = "Measuring FPS…"
+        } else if (lastFps == 0) {
+            _message.value = "FPS: no frames captured yet — open a game."
         }
-
-        _message.value = if (candidates.isEmpty())
-            "FPS: no game surface focused yet."
-        else
-            "FPS: layer found but no frame data. Try Winlator's OpenGL/Vulkan mode."
-        return null
-    }
-
-    /**
-     * Builds candidate SurfaceFlinger layer names for the focused app. The modern
-     * `--list` wraps names as `RequestedLayerState{<name> <ts>#<id> ...}`, so we
-     * strip the wrapper/metadata and also try the name without the handle prefix
-     * and without the (BLAST) suffix, since `--latency` matching varies.
-     */
-    private fun detectLayerCandidates(svc: IUserService): List<String> {
-        val focus = svc.exec("dumpsys window 2>/dev/null | grep -E 'mCurrentFocus|mFocusedApp'")
-        val pkg = Regex("([a-zA-Z0-9_.]+)/[a-zA-Z0-9_.]+").find(focus)?.groupValues?.getOrNull(1)
-
-        val out = LinkedHashSet<String>()
-        svc.exec("dumpsys SurfaceFlinger --list").lineSequence().forEach { raw ->
-            val line = raw.trim()
-            if (!line.contains("SurfaceView[")) return@forEach
-            if (pkg != null && !line.contains(pkg)) return@forEach
-
-            val inner = Regex("""RequestedLayerState\{(.+)}""").find(line)?.groupValues?.get(1) ?: line
-            val name = inner
-                .replace(Regex("""\s+\d\d-\d\d \d\d:\d\d:\d\d\.\d+#\d+.*$"""), "")
-                .trim()
-            if (name.isBlank() || name.startsWith("Background")) return@forEach
-
-            out.add(name)
-            val noHandle = name.replace(Regex("^[0-9a-fA-F]+\\s+"), "")
-            out.add(noHandle)
-            out.add(noHandle.replace("(BLAST)", "").trim())
-        }
-        return out.toList()
-    }
-
-    /**
-     * Parses `--latency` output: first line is the refresh period (ns); each
-     * following line has three timestamps, the middle one being the frame's
-     * present time. FPS = (frames - 1) / span in seconds.
-     */
-    private fun parseLatency(output: String): Int? {
-        val lines = output.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
-        if (lines.size < 3) return null
-
-        val present = ArrayList<Long>(lines.size)
-        for (i in 1 until lines.size) {
-            val cols = lines[i].split(Regex("\\s+"))
-            if (cols.size < 3) continue
-            val t = cols[1].toLongOrNull() ?: continue
-            if (t > 0L && t != Long.MAX_VALUE) present.add(t)
-        }
-        if (present.size < 2) return null
-
-        val first = present.first()
-        val last = present.last()
-        val spanSec = (last - first) / 1_000_000_000.0
-        if (spanSec <= 0.0) return null
-
-        val fps = (present.size - 1) / spanSec
-        if (fps <= 0.0 || fps > 400.0) return null
-        return fps.toInt()
+        return lastFps
     }
 
     private fun set(state: State, message: String) {
