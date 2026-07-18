@@ -10,6 +10,7 @@ import android.provider.Settings
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -229,24 +230,32 @@ class OverlayController(private val context: Context) {
     private fun buildHorizontal(): LinearLayout {
         val d = View(context).apply {
             layoutParams = LinearLayout.LayoutParams(dp(10f), dp(10f)).apply {
-                rightMargin = dp(10f)
+                rightMargin = dp(12f)
             }
             background = circle(OFF_DOT)
         }
         dot = d
 
-        // Row 1: the always-visible stats. FlowLayout wraps to a new line when
-        // there are too many metrics to fit the screen width.
-        val row = FlowLayout(context).apply {
-            horizontalGap = dp(12f)
-            verticalGap = dp(6f)
-            maxWidthPx = context.resources.displayMetrics.widthPixels - dp(28f)
+        // Single row of stats.
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             addView(d)
         }
         orderedMetrics().forEach { key -> row.addView(horizontalCell(key)) }
 
-        // Outer column so the toggle + close controls sit on their own line and
-        // never get pushed off-screen no matter how many metrics are shown.
+        // Measure the natural width; if it overflows, shrink everything uniformly
+        // so all metrics stay on ONE line instead of wrapping.
+        val maxW = context.resources.displayMetrics.widthPixels - dp(50f)
+        row.measure(
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        )
+        if (maxW in 1 until row.measuredWidth) {
+            scaleViews(row, maxW.toFloat() / row.measuredWidth)
+        }
+
+        // Outer column so the toggle + close controls sit on their own line.
         return LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             background = roundedFill(SURFACE, dp(16f), STROKE)
@@ -254,6 +263,22 @@ class OverlayController(private val context: Context) {
             addView(row)
             if (showButton) addView(controlRow())
             setOnClickListener { if (!showButton) { showButton = true; rebuild() } }
+        }
+    }
+
+    /** Uniformly scales text sizes, paddings and margins of a view subtree. */
+    private fun scaleViews(v: View, f: Float) {
+        if (v is TextView) v.setTextSize(TypedValue.COMPLEX_UNIT_PX, v.textSize * f)
+        v.setPadding(
+            (v.paddingLeft * f).toInt(), (v.paddingTop * f).toInt(),
+            (v.paddingRight * f).toInt(), (v.paddingBottom * f).toInt()
+        )
+        (v.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+            lp.leftMargin = (lp.leftMargin * f).toInt()
+            lp.rightMargin = (lp.rightMargin * f).toInt()
+        }
+        if (v is ViewGroup) {
+            for (i in 0 until v.childCount) scaleViews(v.getChildAt(i), f)
         }
     }
 
@@ -284,6 +309,10 @@ class OverlayController(private val context: Context) {
         return LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { rightMargin = dp(14f) }
             addView(value); addView(label)
         }
     }
