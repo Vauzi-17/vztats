@@ -60,6 +60,16 @@ object GameWatcher {
         return last
     }
 
+    /**
+     * Whether this package should trigger the gaming automation. The user's
+     * ticked list wins; only when it's empty do we guess from the app category
+     * (which misses emulators such as Winlator).
+     */
+    fun isTargetApp(context: Context, pkg: String): Boolean {
+        val selected = Prefs.get(context).gamePackages
+        return if (selected.isNotEmpty()) pkg in selected else isGame(context, pkg)
+    }
+
     /** True when the package declares android:appCategory="game". */
     fun isGame(context: Context, pkg: String): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false

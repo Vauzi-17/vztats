@@ -65,6 +65,15 @@ class Prefs private constructor(private val sp: SharedPreferences) {
         get() = sp.getBoolean(KEY_RESTRICT_BG, false)
         set(value) = sp.edit().putBoolean(KEY_RESTRICT_BG, value).apply()
 
+    /**
+     * Packages the user ticked as "games". These drive the gaming automation.
+     * When empty we fall back to apps that declare android:appCategory="game",
+     * which misses emulators like Winlator — hence the explicit list.
+     */
+    var gamePackages: Set<String>
+        get() = sp.getStringSet(KEY_GAME_PKGS, emptySet())?.toSet() ?: emptySet()
+        set(value) = sp.edit().putStringSet(KEY_GAME_PKGS, value).apply()
+
     // --- Floating window customisation ---------------------------------------
 
     /** Which metrics the floating panel shows, as a set of METRIC_* keys. */
@@ -106,6 +115,7 @@ class Prefs private constructor(private val sp: SharedPreferences) {
         const val KEY_FPS_ENABLED = "fps_enabled"
         const val KEY_AUTO_RAM = "auto_ram_boost"
         const val KEY_RESTRICT_BG = "restrict_background"
+        const val KEY_GAME_PKGS = "game_packages"
         const val KEY_FLOAT_METRICS = "floating_metrics"
         const val KEY_FLOAT_MODE = "floating_mode"
         const val KEY_FLOAT_OPACITY = "floating_opacity"

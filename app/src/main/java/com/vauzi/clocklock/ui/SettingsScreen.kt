@@ -212,7 +212,35 @@ fun SettingsScreen(
         SectionHeader("Gaming automation")
         var autoRam by remember { mutableStateOf(prefs.autoRamBoost) }
         var restrictBg by remember { mutableStateOf(prefs.restrictBackground) }
+        var showPicker by remember { mutableStateOf(false) }
+        var gameCount by remember { mutableIntStateOf(prefs.gamePackages.size) }
         val hasUsage = GameWatcher.hasUsageAccess(context)
+
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable { showPicker = true }
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                Text("Game list", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    if (gameCount > 0) "$gameCount app(s) ticked"
+                    else "None ticked — falls back to apps declared as games",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text("Choose", color = MaterialTheme.colorScheme.primary)
+        }
+
+        if (showPicker) {
+            GamePickerDialog(onDismiss = {
+                showPicker = false
+                gameCount = prefs.gamePackages.size
+            })
+        }
 
         if (!hasUsage && (autoRam || restrictBg)) {
             Text(

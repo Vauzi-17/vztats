@@ -261,7 +261,7 @@ class TurboService : Service() {
                 if (fg == lastForeground) continue
                 lastForeground = fg
 
-                val isGameNow = GameWatcher.isGame(applicationContext, fg)
+                val isGameNow = GameWatcher.isTargetApp(applicationContext, fg)
                 if (isGameNow && !gameActive) {
                     gameActive = true
                     if (wantAuto) {
