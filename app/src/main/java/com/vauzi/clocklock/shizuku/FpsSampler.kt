@@ -142,8 +142,12 @@ object FpsSampler {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             if (binder != null && binder.pingBinder()) {
                 service = IUserService.Stub.asInterface(binder)
-                startLoop()
-                set(State.RUNNING, "Measuring FPS…")
+                // Only start sampling if the user actually wants FPS; the shell may
+                // have been bound just to run one-off commands (e.g. RAM boost).
+                if (appContext?.let { Prefs.get(it).fpsEnabled } == true) {
+                    startLoop()
+                    set(State.RUNNING, "Measuring FPS…")
+                }
             } else {
                 set(State.ERROR, "Shizuku service returned no binder.")
             }
@@ -152,6 +156,31 @@ object FpsSampler {
         override fun onServiceDisconnected(name: ComponentName?) {
             service = null
         }
+    }
+
+    /** True when the Shizuku shell user-service is bound and usable. */
+    val shellReady: Boolean get() = service != null
+
+    /** Runs a shell command through Shizuku; null when the shell isn't bound. */
+    fun execShell(cmd: String): String? = runCatching { service?.exec(cmd) }.getOrNull()
+
+    /**
+     * Binds the shell user-service *without* starting FPS sampling, so features
+     * like RAM boost can use Shizuku even when the FPS counter is off.
+     */
+    fun ensureShellBound(context: Context) {
+        appContext = context.applicationContext
+        if (service != null || !shizukuReady()) return
+        val granted = runCatching {
+            Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+        }.getOrDefault(false)
+        if (!granted) return
+        val ctx = appContext ?: return
+        val a = args ?: Shizuku.UserServiceArgs(
+            ComponentName(ctx.packageName, ShellUserService::class.java.name)
+        ).daemon(false).processNameSuffix("fps").debuggable(false).version(1)
+        args = a
+        runCatching { Shizuku.bindUserService(a, connection) }
     }
 
     private fun bindAndStart() {

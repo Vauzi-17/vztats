@@ -17,13 +17,16 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.vauzi.clocklock.MainActivity
 import com.vauzi.clocklock.R
+import com.vauzi.clocklock.core.BackgroundLimiter
 import com.vauzi.clocklock.core.CpuMonitor
 import com.vauzi.clocklock.core.CpuSample
+import com.vauzi.clocklock.core.GameWatcher
 import com.vauzi.clocklock.core.FpsProbe
 import com.vauzi.clocklock.core.GpuMonitor
 import com.vauzi.clocklock.core.GpuSample
 import com.vauzi.clocklock.core.PowerMonitor
 import com.vauzi.clocklock.core.Prefs
+import com.vauzi.clocklock.core.RamBooster
 import com.vauzi.clocklock.core.SessionRecorder
 import com.vauzi.clocklock.core.SystemMonitor
 import com.vauzi.clocklock.core.TurboManager
@@ -98,6 +101,7 @@ class TurboService : Service() {
         startAsForeground()
         startAutoSafetyLoop()
         startStatsLoop()
+        startGameWatchLoop()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -114,6 +118,8 @@ class TurboService : Service() {
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(screenReceiver) }
+        // Never leave other apps stuck in the restricted bucket.
+        runCatching { BackgroundLimiter.restore(applicationContext) }
         prefs.unregisterListener(prefsListener)
         overlay?.hide()
         overlay = null
@@ -177,7 +183,9 @@ class TurboService : Service() {
 
     private fun syncOverlay() {
         if (prefs.overlayEnabled && OverlayController.canDraw(this)) {
-            if (overlay == null) overlay = OverlayController(this)
+            if (overlay == null) overlay = OverlayController(this).also { ov ->
+                ov.onRamBoost = { runRamBoost() }
+            }
             overlay?.show()
             overlay?.refresh()
         } else {
@@ -235,13 +243,63 @@ class TurboService : Service() {
         }
     }
 
+    // --- Game detection: auto RAM boost + background restriction -------------
+
+    private var lastForeground: String? = null
+    private var gameActive = false
+
+    private fun startGameWatchLoop() {
+        scope.launch {
+            while (isActive) {
+                delay(3_000L)
+                val wantAuto = prefs.autoRamBoost
+                val wantRestrict = prefs.restrictBackground
+                if (!wantAuto && !wantRestrict) continue
+                if (!GameWatcher.hasUsageAccess(applicationContext)) continue
+
+                val fg = GameWatcher.foregroundPackage(applicationContext) ?: continue
+                if (fg == lastForeground) continue
+                lastForeground = fg
+
+                val isGameNow = GameWatcher.isGame(applicationContext, fg)
+                if (isGameNow && !gameActive) {
+                    gameActive = true
+                    if (wantAuto) {
+                        runCatching { RamBooster.boost(applicationContext, fg) }
+                    }
+                    if (wantRestrict) {
+                        runCatching { BackgroundLimiter.restrictFor(applicationContext, fg) }
+                    }
+                } else if (!isGameNow && gameActive) {
+                    gameActive = false
+                    runCatching { BackgroundLimiter.restore(applicationContext) }
+                }
+            }
+        }
+    }
+
+    /** Frees background RAM and reports the measured delta on the overlay chip. */
+    private fun runRamBoost() {
+        scope.launch {
+            val result = runCatching { RamBooster.boost(applicationContext) }.getOrNull()
+            val label = when {
+                result == null -> "err"
+                result.freedMb > 0 -> "+${result.freedMb}MB"
+                else -> "ok"
+            }
+            withContext(Dispatchers.Main) { overlay?.flashRamResult(label) }
+        }
+    }
+
     private fun batteryLevel(): Int {
         val bm = getSystemService(BatteryManager::class.java) ?: return -1
         return bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
     }
 
     private fun stopIfNothingToDo() {
-        if (!prefs.desiredTurbo && !prefs.overlayEnabled && !SessionRecorder.recording.value) {
+        if (!prefs.desiredTurbo && !prefs.overlayEnabled && !SessionRecorder.recording.value &&
+            !prefs.autoRamBoost && !prefs.restrictBackground
+        ) {
             stopSelf()
         }
     }
@@ -262,7 +320,8 @@ class TurboService : Service() {
         fun sync(context: Context) {
             val prefs = Prefs.get(context)
             val shouldRun = prefs.desiredTurbo || prefs.overlayEnabled ||
-                SessionRecorder.recording.value
+                SessionRecorder.recording.value ||
+                prefs.autoRamBoost || prefs.restrictBackground
             val intent = Intent(context, TurboService::class.java)
             if (!shouldRun) intent.action = ACTION_STOP
             runCatching {

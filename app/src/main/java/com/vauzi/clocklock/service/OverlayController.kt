@@ -45,6 +45,10 @@ class OverlayController(private val context: Context) {
     private var statusText: TextView? = null
     private var toggleBtn: TextView? = null
     private var pillValue: TextView? = null
+    private var ramChipView: TextView? = null
+
+    /** Invoked when the user taps the RAM chip in the control row. */
+    var onRamBoost: (() -> Unit)? = null
 
     private var lastGpu: GpuSample? = null
     private var lastCpu: CpuSample? = null
@@ -121,7 +125,7 @@ class OverlayController(private val context: Context) {
 
     private fun clearRefs() {
         valueViews.clear()
-        dot = null; statusText = null; toggleBtn = null; pillValue = null
+        dot = null; statusText = null; toggleBtn = null; pillValue = null; ramChipView = null
     }
 
     // --- data -----------------------------------------------------------------
@@ -287,7 +291,38 @@ class OverlayController(private val context: Context) {
         gravity = Gravity.CENTER_VERTICAL
         setPadding(0, dp(8f), 0, dp(1f))
         addView(toggleButton(topMargin = 0, compactChip = true))
+        addView(ramChip())
         addView(closeChip())
+    }
+
+    /** Frees background RAM. The foreground game is never killed by this. */
+    private fun ramChip(): TextView {
+        val chip = TextView(context).apply {
+            text = "RAM"
+            gravity = Gravity.CENTER
+            textSize = 11f * scale
+            setTypeface(Typeface.DEFAULT_BOLD)
+            setTextColor(TEXT)
+            background = roundedFill(BTN_OFF_BG, dp(11f))
+            setPadding(dp(12f), dp(6f), dp(12f), dp(6f))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { leftMargin = dp(8f) }
+            setOnClickListener {
+                text = "…"
+                onRamBoost?.invoke()
+            }
+        }
+        ramChipView = chip
+        return chip
+    }
+
+    /** Briefly shows the RAM-boost outcome on the chip, then restores the label. */
+    fun flashRamResult(msg: String) {
+        val chip = ramChipView ?: return
+        chip.text = msg
+        chip.postDelayed({ ramChipView?.text = "RAM" }, 2500L)
     }
 
     private fun horizontalCell(key: String): LinearLayout {

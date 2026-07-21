@@ -55,6 +55,16 @@ class Prefs private constructor(private val sp: SharedPreferences) {
         get() = sp.getBoolean(KEY_FPS_ENABLED, false)
         set(value) = sp.edit().putBoolean(KEY_FPS_ENABLED, value).apply()
 
+    /** Free background RAM automatically when a game comes to the foreground. */
+    var autoRamBoost: Boolean
+        get() = sp.getBoolean(KEY_AUTO_RAM, false)
+        set(value) = sp.edit().putBoolean(KEY_AUTO_RAM, value).apply()
+
+    /** Push other apps into the restricted standby bucket while gaming. */
+    var restrictBackground: Boolean
+        get() = sp.getBoolean(KEY_RESTRICT_BG, false)
+        set(value) = sp.edit().putBoolean(KEY_RESTRICT_BG, value).apply()
+
     // --- Floating window customisation ---------------------------------------
 
     /** Which metrics the floating panel shows, as a set of METRIC_* keys. */
@@ -94,6 +104,8 @@ class Prefs private constructor(private val sp: SharedPreferences) {
         const val KEY_THEME = "theme_mode"
         const val KEY_DYNAMIC = "dynamic_color"
         const val KEY_FPS_ENABLED = "fps_enabled"
+        const val KEY_AUTO_RAM = "auto_ram_boost"
+        const val KEY_RESTRICT_BG = "restrict_background"
         const val KEY_FLOAT_METRICS = "floating_metrics"
         const val KEY_FLOAT_MODE = "floating_mode"
         const val KEY_FLOAT_OPACITY = "floating_opacity"

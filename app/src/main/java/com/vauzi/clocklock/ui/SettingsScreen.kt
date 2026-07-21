@@ -23,7 +23,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.clickable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.vauzi.clocklock.core.GameWatcher
 import com.vauzi.clocklock.core.Prefs
 import com.vauzi.clocklock.service.TurboService
 import com.vauzi.clocklock.shizuku.FpsSampler
@@ -204,6 +206,53 @@ fun SettingsScreen(
             fpsMsg,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        // --- Gaming automation -----------------------------------------------
+        SectionHeader("Gaming automation")
+        var autoRam by remember { mutableStateOf(prefs.autoRamBoost) }
+        var restrictBg by remember { mutableStateOf(prefs.restrictBackground) }
+        val hasUsage = GameWatcher.hasUsageAccess(context)
+
+        if (!hasUsage && (autoRam || restrictBg)) {
+            Text(
+                "Needs \"Usage access\" to detect when a game opens — tap to grant.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { context.startActivity(GameWatcher.usageAccessIntent()) }
+                    .padding(vertical = 6.dp)
+            )
+        }
+
+        SettingSwitch(
+            title = "Auto RAM boost on game launch",
+            description = "Frees background RAM the moment a game comes to the foreground. " +
+                "Only background processes are killed — the game is never touched.",
+            checked = autoRam,
+            onCheckedChange = {
+                autoRam = it
+                prefs.autoRamBoost = it
+                if (it && !GameWatcher.hasUsageAccess(context)) {
+                    context.startActivity(GameWatcher.usageAccessIntent())
+                }
+                TurboService.sync(context)
+            }
+        )
+        SettingSwitch(
+            title = "Restrict background apps while gaming",
+            description = "Puts other installed apps in the restricted standby bucket during a " +
+                "game so they stop waking up, then restores them afterwards. Needs Shizuku.",
+            checked = restrictBg,
+            onCheckedChange = {
+                restrictBg = it
+                prefs.restrictBackground = it
+                if (it && !GameWatcher.hasUsageAccess(context)) {
+                    context.startActivity(GameWatcher.usageAccessIntent())
+                }
+                TurboService.sync(context)
+            }
         )
 
         // --- Behaviour -------------------------------------------------------

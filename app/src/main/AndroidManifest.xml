@@ -11,6 +11,12 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Optional: run shell commands (SurfaceFlinger FPS) via Shizuku, no root -->
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
+    <!-- RAM boost fallback when Shizuku isn't available -->
+    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
+    <!-- Detect the foreground game (auto RAM boost / background restriction) -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
 
     <application
         android:allowBackup="true"
