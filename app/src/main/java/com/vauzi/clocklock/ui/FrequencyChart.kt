@@ -11,11 +11,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 
-/**
- * Minimal GPU-frequency line chart with a soft gradient fill. Pure Compose
- * Canvas, no chart dependency. The dashed line marks the reported max clock, so
- * a flat line riding the dash is visible proof turbo is pinning the clock.
- */
 @Composable
 fun FrequencyChart(
     history: List<Int>,
@@ -25,7 +20,7 @@ fun FrequencyChart(
     val lineColor = MaterialTheme.colorScheme.primary
     val maxLineColor = MaterialTheme.colorScheme.error
     val gridColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val fillTop = lineColor.copy(alpha = 0.28f)
+    val fillTop = lineColor.copy(alpha = 0.22f)
 
     Canvas(modifier) {
         val w = size.width
@@ -36,20 +31,20 @@ fun FrequencyChart(
         val ceiling = (maxMhz ?: dataMax).coerceAtLeast(1).toFloat() * 1.08f
 
         drawLine(
-            color = gridColor.copy(alpha = 0.3f),
+            color = gridColor.copy(alpha = 0.2f),
             start = Offset(0f, h),
             end = Offset(w, h),
-            strokeWidth = 2f
+            strokeWidth = 1.5f
         )
 
         if (maxMhz != null && maxMhz > 0) {
             val y = h - (maxMhz / ceiling) * h
             drawLine(
-                color = maxLineColor.copy(alpha = 0.55f),
+                color = maxLineColor.copy(alpha = 0.45f),
                 start = Offset(0f, y),
                 end = Offset(w, y),
-                strokeWidth = 2f,
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))
+                strokeWidth = 1.5f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f))
             )
         }
 
@@ -65,7 +60,6 @@ fun FrequencyChart(
             if (i == 0) line.moveTo(x, y) else line.lineTo(x, y)
         }
 
-        // Gradient fill under the line.
         val fill = Path().apply {
             addPath(line)
             lineTo((history.size - 1) * stepX, h)
@@ -76,6 +70,6 @@ fun FrequencyChart(
             path = fill,
             brush = Brush.verticalGradient(listOf(fillTop, Color.Transparent))
         )
-        drawPath(path = line, color = lineColor, style = Stroke(width = 5f))
+        drawPath(path = line, color = lineColor, style = Stroke(width = 4f))
     }
 }

@@ -356,7 +356,7 @@ class OverlayController(private val context: Context) {
 
     private fun header(withClose: Boolean, onClose: () -> Unit): LinearLayout {
         val title = TextView(context).apply {
-            text = "CLOCK LOCK"
+            text = "VZTATS"
             setTextColor(MUTED)
             textSize = 10.5f * scale
             letterSpacing = 0.12f

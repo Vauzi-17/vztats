@@ -1,46 +1,57 @@
 package com.vauzi.clocklock.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vauzi.clocklock.core.SystemMonitor
 import com.vauzi.clocklock.core.SystemSample
 import com.vauzi.clocklock.core.TurboManager
+import com.vauzi.clocklock.ui.theme.Dimens
 import com.vauzi.clocklock.ui.theme.ThemeMode
 
 private enum class Dest(val label: String, val icon: ImageVector) {
-    CONTROL("Control", Icons.Filled.Bolt),
-    MONITOR("Monitor", Icons.Filled.Speed),
-    SETTINGS("Settings", Icons.Filled.Tune),
-    INFO("Info", Icons.Filled.Info)
+    HOME("Home", Icons.Filled.Home),
+    SETTINGS("Settings", Icons.Filled.Tune)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppRoot(
     themeMode: ThemeMode,
@@ -50,7 +61,7 @@ fun AppRoot(
     onRequestOverlayPermission: () -> Unit,
     hasOverlayPermission: () -> Boolean
 ) {
-    var current by remember { mutableStateOf(Dest.CONTROL) }
+    var current by remember { mutableStateOf(Dest.HOME) }
     val turboState by TurboManager.state.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
@@ -67,62 +78,136 @@ fun AppRoot(
         }
     }
 
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Adreno GPU Turbo") },
-                actions = {
-                    IconButton(onClick = { onThemeModeChange(themeMode.next()) }) {
-                        Icon(
-                            imageVector = when (themeMode) {
-                                ThemeMode.SYSTEM -> Icons.Filled.BrightnessAuto
-                                ThemeMode.LIGHT -> Icons.Filled.LightMode
-                                ThemeMode.DARK -> Icons.Filled.DarkMode
-                            },
-                            contentDescription = "Toggle theme"
-                        )
-                    }
-                }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            AppHeader(
+                title = current.label,
+                themeMode = themeMode,
+                onThemeModeChange = onThemeModeChange
             )
-        },
-        bottomBar = {
-            NavigationBar {
-                Dest.entries.forEach { dest ->
-                    NavigationBarItem(
-                        selected = current == dest,
-                        onClick = { current = dest },
-                        icon = { Icon(dest.icon, contentDescription = dest.label) },
-                        label = { Text(dest.label) }
+            Box(Modifier.weight(1f)) {
+                when (current) {
+                    Dest.HOME -> HomeScreen(turboState = turboState, sample = sample, history = history)
+                    Dest.SETTINGS -> SettingsScreen(
+                        themeMode = themeMode,
+                        dynamicColor = dynamicColor,
+                        onThemeModeChange = onThemeModeChange,
+                        onDynamicColorChange = onDynamicColorChange,
+                        onRequestOverlayPermission = onRequestOverlayPermission,
+                        hasOverlayPermission = hasOverlayPermission
                     )
                 }
             }
         }
-    ) { padding ->
-        val contentModifier = Modifier.padding(padding)
-        when (current) {
-            Dest.CONTROL -> HomeScreen(
-                modifier = contentModifier,
-                turboState = turboState,
-                sample = sample
-            )
 
-            Dest.MONITOR -> MonitorScreen(
-                modifier = contentModifier,
-                sample = sample,
-                history = history
-            )
+        FloatingNavBar(
+            items = Dest.entries.map { it.label to it.icon },
+            selectedIndex = Dest.entries.indexOf(current),
+            onSelect = { current = Dest.entries[it] },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = Dimens.SpaceL)
+        )
+    }
+}
 
-            Dest.SETTINGS -> SettingsScreen(
-                modifier = contentModifier,
-                themeMode = themeMode,
-                dynamicColor = dynamicColor,
-                onThemeModeChange = onThemeModeChange,
-                onDynamicColorChange = onDynamicColorChange,
-                onRequestOverlayPermission = onRequestOverlayPermission,
-                hasOverlayPermission = hasOverlayPermission
-            )
+@Composable
+private fun AppHeader(
+    title: String,
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(horizontal = Dimens.SpaceL, vertical = Dimens.SpaceM),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.weight(1f)
+        )
+        RoundIconButton(
+            icon = when (themeMode) {
+                ThemeMode.SYSTEM -> Icons.Filled.BrightnessAuto
+                ThemeMode.LIGHT -> Icons.Filled.LightMode
+                ThemeMode.DARK -> Icons.Filled.DarkMode
+            },
+            contentDescription = "Toggle theme",
+            onClick = { onThemeModeChange(themeMode.next()) }
+        )
+    }
+}
 
-            Dest.INFO -> InfoScreen(modifier = contentModifier, sample = sample)
+@Composable
+private fun RoundIconButton(icon: ImageVector, contentDescription: String?, onClick: () -> Unit) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+    ) {
+        Icon(icon, contentDescription = contentDescription, modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun FloatingNavBar(
+    items: List<Pair<String, ImageVector>>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 4.dp,
+        shadowElevation = 10.dp,
+        modifier = modifier
+    ) {
+        Row(
+            Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items.forEachIndexed { i, (label, icon) ->
+                val selected = i == selectedIndex
+                NavPillItem(label, icon, selected) { onSelect(i) }
+                if (i != items.lastIndex) Spacer(Modifier.width(2.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun NavPillItem(
+    label: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val bg = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
+    val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = if (selected) 16.dp else 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = label, tint = fg, modifier = Modifier.size(20.dp))
+        if (selected) {
+            Spacer(Modifier.width(6.dp))
+            Text(label, color = fg, style = MaterialTheme.typography.labelLarge)
         }
     }
 }
