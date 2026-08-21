@@ -80,7 +80,10 @@ class TurboService : Service() {
                 Prefs.KEY_FLOAT_METRICS,
                 Prefs.KEY_FLOAT_MODE,
                 Prefs.KEY_FLOAT_OPACITY,
-                Prefs.KEY_FLOAT_SIZE ->
+                Prefs.KEY_FLOAT_SIZE,
+                Prefs.KEY_FLOAT_COMPACT_METRIC,
+                Prefs.KEY_THEME,
+                Prefs.KEY_DYNAMIC ->
                     scope.launch(Dispatchers.Main) { overlay?.rebuild() }
             }
         }

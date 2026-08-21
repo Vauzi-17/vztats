@@ -348,17 +348,28 @@ class OverlayController(private val context: Context) {
         // where the panel actually sits on screen (it may have been dragged),
         // not just a flat guess — the outer capsule's own padding (matching the
         // padding set below) and a bit of edge breathing room both come out of
-        // the same screen width the row has to fit in.
+        // the same screen width the row has to fit in. Uses the WindowManager's
+        // own bounds rather than the (service) context's display metrics, since
+        // those aren't guaranteed to agree on every OEM skin.
         val outerPadding = dp(10f) * 2
         val edgeSafety = dp(20f)
-        val maxW = context.resources.displayMetrics.widthPixels -
-            (if (::params.isInitialized) params.x else dpRaw(16)) - outerPadding - edgeSafety
+        val screenW = realScreenWidthPx()
+        val maxW = screenW - (if (::params.isInitialized) params.x else dpRaw(16)) - outerPadding - edgeSafety
         row.measure(
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
         )
         if (maxW in 1 until row.measuredWidth) {
             scaleViews(row, maxW.toFloat() / row.measuredWidth)
+            // Text metrics don't scale perfectly linearly (hinting/rounding), so
+            // re-check and nudge once more if the first pass undershot slightly.
+            row.measure(
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            )
+            if (row.measuredWidth > maxW) {
+                scaleViews(row, maxW.toFloat() / row.measuredWidth)
+            }
         }
 
         // Outer column so the toggle + close controls sit on their own line.
@@ -653,6 +664,14 @@ class OverlayController(private val context: Context) {
     private fun dpRaw(v: Int): Int = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), context.resources.displayMetrics
     ).roundToInt()
+
+    /** Real usable screen width in px, from the WindowManager actually hosting the overlay. */
+    private fun realScreenWidthPx(): Int = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        wm.currentWindowMetrics.bounds.width()
+    } else {
+        @Suppress("DEPRECATION")
+        android.graphics.Point().also { wm.defaultDisplay.getRealSize(it) }.x
+    }
 
     private fun circle(color: Int) = GradientDrawable().apply {
         shape = GradientDrawable.OVAL
