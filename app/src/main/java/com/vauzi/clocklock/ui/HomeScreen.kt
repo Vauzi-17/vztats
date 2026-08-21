@@ -1,24 +1,19 @@
 package com.vauzi.clocklock.ui
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -40,11 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -91,55 +82,101 @@ fun HomeScreen(
     ) {
         Spacer(Modifier.height(Dimens.SpaceXS))
 
-        // --- Hero card: gauge + status + power button --------------------------
-        TurboCard(padding = Dimens.SpaceXL, radius = Dimens.RadiusXL) {
-            Column(
-                Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(Dimens.SpaceL)
-            ) {
-                TurboGauge(
+        // --- GPU & turbo ---------------------------------------------------------
+        TurboCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RingStat(
                     fraction = gpu?.loadOfMax ?: 0f,
                     centerValue = gpu?.freqMhz?.toString() ?: "—",
-                    subLabel = gpu?.maxFreqMhz?.let { "of $it MHz" } ?: "GPU clock",
+                    subLabel = "MHz",
                     active = turboState.desiredOn,
-                    modifier = Modifier
-                        .fillMaxWidth(0.68f)
-                        .aspectRatio(1f)
+                    modifier = Modifier.size(84.dp)
                 )
-
-                val (pillText, pillColor) = statusFor(turboState, gpu?.isAtMax == true)
-                StatusPill(pillText, pillColor)
-
-                PowerButton(
-                    on = turboState.desiredOn,
-                    onToggle = { TurboManager.setTurbo(context, !turboState.desiredOn) }
-                )
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .padding(start = Dimens.SpaceL),
+                    verticalArrangement = Arrangement.spacedBy(Dimens.SpaceXS)
+                ) {
+                    val (pillText, pillColor) = statusFor(turboState, gpu?.isAtMax == true)
+                    StatusPill(pillText, pillColor)
+                    CardStatLine("Max", gpu?.maxFreqMhz?.let { "$it MHz" } ?: "—")
+                    CardStatLine(
+                        "Temp",
+                        gpu?.tempC?.let { "%.0f°C".format(it) } ?: "—",
+                        tempAccent(gpu?.tempC)
+                    )
+                    Spacer(Modifier.height(Dimens.SpaceXS))
+                    PowerButton(
+                        on = turboState.desiredOn,
+                        onToggle = { TurboManager.setTurbo(context, !turboState.desiredOn) }
+                    )
+                }
             }
         }
 
-        // --- Quick stats row ---------------------------------------------------
-        Row(horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceS)) {
-            MetricTile(
-                label = "GPU temp",
-                value = gpu?.tempC?.let { "%.0f".format(it) } ?: "—",
-                unit = "°C",
-                accent = tempAccent(gpu?.tempC),
-                modifier = Modifier.weight(1f)
-            )
-            MetricTile(
-                label = "CPU clock",
-                value = cpu?.freqMhz?.let { "%.1f".format(it / 1000f) } ?: "—",
-                unit = "GHz",
-                modifier = Modifier.weight(1f)
-            )
-            MetricTile(
-                label = "CPU temp",
-                value = cpu?.tempC?.let { "%.0f".format(it) } ?: "—",
-                unit = "°C",
-                accent = tempAccent(cpu?.tempC),
-                modifier = Modifier.weight(1f)
-            )
+        // --- CPU -------------------------------------------------------------------
+        TurboCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RingStat(
+                    fraction = (cpu?.usagePct ?: 0) / 100f,
+                    centerValue = cpu?.usagePct?.toString() ?: "—",
+                    subLabel = "%",
+                    modifier = Modifier.size(84.dp)
+                )
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .padding(start = Dimens.SpaceL),
+                    verticalArrangement = Arrangement.spacedBy(Dimens.SpaceXS)
+                ) {
+                    Text("CPU", style = MaterialTheme.typography.titleSmall)
+                    CardStatLine("Clock", cpu?.freqMhz?.let { "%.2f GHz".format(it / 1000f) } ?: "—")
+                    CardStatLine("Max", cpu?.maxMhz?.let { "%.2f GHz".format(it / 1000f) } ?: "—")
+                    CardStatLine(
+                        "Temp",
+                        cpu?.tempC?.let { "%.0f°C".format(it) } ?: "—",
+                        tempAccent(cpu?.tempC)
+                    )
+                }
+            }
+        }
+
+        // --- Memory & battery --------------------------------------------------
+        TurboCard {
+            val ramPct = power?.ramUsedMb?.let { used ->
+                power.ramTotalMb?.takeIf { it > 0 }?.let { total -> used.toFloat() / total.toFloat() }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RingStat(
+                    fraction = ramPct ?: 0f,
+                    centerValue = ramPct?.let { (it * 100).toInt().toString() } ?: "—",
+                    subLabel = "%",
+                    modifier = Modifier.size(84.dp)
+                )
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .padding(start = Dimens.SpaceL),
+                    verticalArrangement = Arrangement.spacedBy(Dimens.SpaceXS)
+                ) {
+                    Text("Memory & battery", style = MaterialTheme.typography.titleSmall)
+                    CardStatLine(
+                        "RAM",
+                        if (power?.ramUsedGbText != null && power.ramTotalGbText != null)
+                            "${power.ramUsedGbText} / ${power.ramTotalGbText} GB" else "—"
+                    )
+                    CardStatLine(
+                        if (power?.charging == true) "Charging" else "Battery",
+                        power?.batteryPct?.let { "$it%" } ?: "—"
+                    )
+                    CardStatLine(
+                        "Batt temp",
+                        power?.batteryTempC?.let { "%.0f°C".format(it) } ?: "—",
+                        tempAccent(power?.batteryTempC)
+                    )
+                }
+            }
         }
 
         // --- GPU frequency chart ------------------------------------------------
@@ -160,7 +197,7 @@ fun HomeScreen(
                 maxMhz = gpu?.maxFreqMhz,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(140.dp)
+                    .height(120.dp)
                     .padding(top = Dimens.SpaceM)
             )
             if (gpu?.isAtMax == true) {
@@ -173,98 +210,7 @@ fun HomeScreen(
             }
         }
 
-        // --- GPU metrics ---------------------------------------------------------
-        SectionHeader("GPU")
-        Row(horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceS)) {
-            MetricTile(
-                label = "Clock",
-                value = gpu?.freqMhz?.toString() ?: "—",
-                unit = "MHz",
-                modifier = Modifier.weight(1f)
-            )
-            MetricTile(
-                label = "Max",
-                value = gpu?.maxFreqMhz?.toString() ?: "—",
-                unit = "MHz",
-                modifier = Modifier.weight(1f)
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceS)) {
-            val loadPct = gpu?.loadOfMax?.let { (it * 100).toInt() }
-            MetricTile(
-                label = "Load",
-                value = loadPct?.toString() ?: "—",
-                unit = "%",
-                accent = if (gpu?.isAtMax == true) TurboGreen else null,
-                modifier = Modifier.weight(1f)
-            )
-            MetricTile(
-                label = "Temp",
-                value = gpu?.tempC?.let { "%.0f".format(it) } ?: "—",
-                unit = "°C",
-                accent = tempAccent(gpu?.tempC),
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        // --- CPU metrics -----------------------------------------------------------
-        SectionHeader("CPU")
-        Row(horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceS)) {
-            MetricTile(
-                label = "Clock",
-                value = cpu?.freqMhz?.let { "%.2f".format(it / 1000f) } ?: "—",
-                unit = "GHz",
-                modifier = Modifier.weight(1f)
-            )
-            MetricTile(
-                label = "Max",
-                value = cpu?.maxMhz?.let { "%.2f".format(it / 1000f) } ?: "—",
-                unit = "GHz",
-                modifier = Modifier.weight(1f)
-            )
-            MetricTile(
-                label = "Temp",
-                value = cpu?.tempC?.let { "%.0f".format(it) } ?: "—",
-                unit = "°C",
-                accent = tempAccent(cpu?.tempC),
-                modifier = Modifier.weight(1f)
-            )
-        }
-        if (cpu?.freqMhz == null) {
-            Text(
-                "CPU clock unavailable on this device.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = Dimens.SpaceXS)
-            )
-        }
-
-        // --- Power and memory -----------------------------------------------------
-        SectionHeader("Power & memory")
-        Row(horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceS)) {
-            MetricTile(
-                label = "Draw",
-                value = power?.currentMa?.toString() ?: "—",
-                unit = "mA",
-                modifier = Modifier.weight(1f)
-            )
-            MetricTile(
-                label = "Battery",
-                value = power?.batteryTempC?.let { "%.0f".format(it) } ?: "—",
-                unit = "°C",
-                accent = tempAccent(power?.batteryTempC),
-                modifier = Modifier.weight(1f)
-            )
-            MetricTile(
-                label = "RAM",
-                value = power?.ramUsedGbText ?: "—",
-                unit = power?.ramTotalGbText?.let { "/ $it GB" } ?: "GB",
-                modifier = Modifier.weight(1f)
-            )
-        }
-
         // --- Frame rate --------------------------------------------------------
-        SectionHeader("Frame rate")
         Row(horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceS)) {
             MetricTile(
                 label = "FPS",
@@ -282,7 +228,7 @@ fun HomeScreen(
         }
         if (sample?.fps == null) {
             Text(
-                "FPS needs the Shizuku sampler (enable in Settings).",
+                "FPS needs the Shizuku sampler (pair it in Settings).",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = Dimens.SpaceXS)
@@ -317,13 +263,7 @@ fun HomeScreen(
         }
 
         val sessions = remember(recording, refreshTick) { SessionStore.list(context) }
-        if (sessions.isEmpty() && !recording) {
-            Text(
-                "No saved sessions yet.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        } else {
+        if (sessions.isNotEmpty()) {
             sessions.take(8).forEach { s ->
                 SessionRow(s) {
                     SessionStore.delete(context, s.id)
@@ -378,69 +318,21 @@ fun HomeScreen(
 }
 
 @Composable
-private fun TurboGauge(
-    fraction: Float,
-    centerValue: String,
-    subLabel: String,
-    active: Boolean,
-    modifier: Modifier = Modifier
-) {
-    val track = MaterialTheme.colorScheme.outlineVariant
-    val arcColor by animateColorAsState(
-        if (active) MaterialTheme.colorScheme.primary
-        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-        label = "arc"
-    )
-    val animFraction by animateFloatAsState(
-        targetValue = fraction.coerceIn(0f, 1f),
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "frac"
-    )
-
-    Box(modifier, contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxWidth().aspectRatio(1f)) {
-            val stroke = size.minDimension * 0.075f
-            val inset = stroke / 2f
-            val arcSize = Size(size.width - stroke, size.height - stroke)
-            val topLeft = Offset(inset, inset)
-            val start = 135f
-            val sweep = 270f
-            drawArc(
-                color = track,
-                startAngle = start,
-                sweepAngle = sweep,
-                useCenter = false,
-                topLeft = topLeft,
-                size = arcSize,
-                style = Stroke(width = stroke, cap = StrokeCap.Round)
-            )
-            drawArc(
-                color = arcColor,
-                startAngle = start,
-                sweepAngle = sweep * animFraction,
-                useCenter = false,
-                topLeft = topLeft,
-                size = arcSize,
-                style = Stroke(width = stroke, cap = StrokeCap.Round)
-            )
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = centerValue,
-                fontFamily = NumberFont,
-                fontWeight = FontWeight.Bold,
-                fontSize = 42.sp,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = subLabel,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+private fun CardStatLine(label: String, value: String, accent: Color? = null) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(64.dp)
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontFamily = NumberFont,
+            fontWeight = FontWeight.Medium,
+            color = accent ?: MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 
@@ -452,29 +344,27 @@ private fun PowerButton(on: Boolean, onToggle: () -> Unit) {
         label = "btn-bg"
     )
     val fg = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-    Column(
+    Row(
         Modifier
-            .fillMaxWidth()
             .clip(RoundedCornerShape(Dimens.RadiusL))
             .background(bg)
             .clickable { onToggle() }
-            .padding(vertical = Dimens.SpaceL),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .padding(horizontal = Dimens.SpaceM, vertical = Dimens.SpaceS),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             Icons.Filled.PowerSettingsNew,
             contentDescription = null,
             tint = fg,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(16.dp)
         )
-        Spacer(Modifier.size(6.dp))
+        Spacer(Modifier.width(6.dp))
         Text(
-            text = if (on) "TURBO ACTIVE" else "ACTIVATE TURBO",
+            text = if (on) "TURBO ON" else "TURBO OFF",
             color = fg,
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
+            letterSpacing = 0.5.sp
         )
     }
 }
@@ -628,6 +518,6 @@ private fun statusFor(state: TurboState, atMax: Boolean): Pair<String, Color> {
         ApplyOutcome.FAILED -> "Kernel rejected" to TurboRed
         ApplyOutcome.APPLIED, ApplyOutcome.NONE ->
             if (atMax) "Active — verified" to TurboGreen
-            else "Applied — waiting for load" to TurboAmber
+            else "Applied — waiting" to TurboAmber
     }
 }

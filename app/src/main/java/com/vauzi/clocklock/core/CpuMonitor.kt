@@ -43,6 +43,48 @@ object CpuMonitor {
 
     fun cpuTempMilliC(): Int? = cpuThermalZone?.let { readInt(File("$it/temp")) }
 
+    private val PROC_STAT = File("/proc/stat")
+
+    @Volatile
+    private var lastTotal: Long = -1L
+
+    @Volatile
+    private var lastIdle: Long = -1L
+
+    /**
+     * Aggregate CPU utilization since the previous call, as a 0..100 percentage,
+     * from the first line of /proc/stat (user+nice+system+... vs idle+iowait).
+     * Returns null on the first call (no baseline yet) or if unreadable.
+     */
+    fun usagePercent(): Int? {
+        val fields = runCatching { PROC_STAT.readLines().firstOrNull() }
+            .getOrNull()
+            ?.takeIf { it.startsWith("cpu ") }
+            ?.trim()
+            ?.split(Regex("\\s+"))
+            ?.drop(1)
+            ?.mapNotNull { it.toLongOrNull() }
+            ?: return null
+        if (fields.size < 4) return null
+
+        val idle = fields[3] + fields.getOrElse(4) { 0L }
+        val total = fields.sum()
+
+        val prevTotal = lastTotal
+        val prevIdle = lastIdle
+        lastTotal = total
+        lastIdle = idle
+
+        if (prevTotal < 0L) return null
+        val totalDelta = total - prevTotal
+        val idleDelta = idle - prevIdle
+        if (totalDelta <= 0L) return null
+
+        return (((totalDelta - idleDelta).toFloat() / totalDelta.toFloat()) * 100f)
+            .toInt()
+            .coerceIn(0, 100)
+    }
+
     private val cpuThermalZone: String? by lazy { findCpuThermalZone() }
 
     private fun findCpuThermalZone(): String? {
@@ -66,7 +108,8 @@ object CpuMonitor {
 data class CpuSample(
     val curKhzMax: Long?,
     val maxKhz: Long?,
-    val tempMilliC: Int?
+    val tempMilliC: Int?,
+    val usagePct: Int? = null
 ) {
     val freqMhz: Int? get() = curKhzMax?.let { (it / 1000L).toInt() }
     val maxMhz: Int? get() = maxKhz?.let { (it / 1000L).toInt() }

@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -62,6 +63,7 @@ fun AppRoot(
     hasOverlayPermission: () -> Boolean
 ) {
     var current by remember { mutableStateOf(Dest.HOME) }
+    var showFloatingDialog by remember { mutableStateOf(false) }
     val turboState by TurboManager.state.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
@@ -87,7 +89,8 @@ fun AppRoot(
             AppHeader(
                 title = current.label,
                 themeMode = themeMode,
-                onThemeModeChange = onThemeModeChange
+                onThemeModeChange = onThemeModeChange,
+                onOpenFloatingMonitor = { showFloatingDialog = true }
             )
             Box(Modifier.weight(1f)) {
                 when (current) {
@@ -114,13 +117,22 @@ fun AppRoot(
                 .padding(bottom = Dimens.SpaceL)
         )
     }
+
+    if (showFloatingDialog) {
+        FloatingMonitorDialog(
+            onDismiss = { showFloatingDialog = false },
+            onRequestOverlayPermission = onRequestOverlayPermission,
+            hasOverlayPermission = hasOverlayPermission
+        )
+    }
 }
 
 @Composable
 private fun AppHeader(
     title: String,
     themeMode: ThemeMode,
-    onThemeModeChange: (ThemeMode) -> Unit
+    onThemeModeChange: (ThemeMode) -> Unit,
+    onOpenFloatingMonitor: () -> Unit
 ) {
     Row(
         Modifier
@@ -135,6 +147,12 @@ private fun AppHeader(
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.weight(1f)
         )
+        RoundIconButton(
+            icon = Icons.Filled.PictureInPictureAlt,
+            contentDescription = "Floating monitor",
+            onClick = onOpenFloatingMonitor
+        )
+        Spacer(Modifier.width(Dimens.SpaceS))
         RoundIconButton(
             icon = when (themeMode) {
                 ThemeMode.SYSTEM -> Icons.Filled.BrightnessAuto

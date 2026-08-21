@@ -13,19 +13,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cable
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vauzi.clocklock.BuildConfig
 import com.vauzi.clocklock.R
@@ -38,19 +35,6 @@ import com.vauzi.clocklock.ui.theme.ThemeMode
 import com.vauzi.clocklock.ui.theme.TurboAmber
 import com.vauzi.clocklock.ui.theme.TurboGreen
 import com.vauzi.clocklock.ui.theme.TurboRed
-
-private data class Metric(val key: String, val label: String)
-
-private val METRICS = listOf(
-    Metric(Prefs.METRIC_FPS, "FPS (needs Shizuku)"),
-    Metric(Prefs.METRIC_GPU_FREQ, "GPU frequency"),
-    Metric(Prefs.METRIC_GPU_TEMP, "GPU temperature"),
-    Metric(Prefs.METRIC_CPU_FREQ, "CPU frequency"),
-    Metric(Prefs.METRIC_CPU_TEMP, "CPU temperature"),
-    Metric(Prefs.METRIC_BATT_POWER, "Battery draw (mA)"),
-    Metric(Prefs.METRIC_BATT_TEMP, "Battery temperature"),
-    Metric(Prefs.METRIC_RAM, "RAM used")
-)
 
 @Composable
 fun SettingsScreen(
@@ -65,15 +49,10 @@ fun SettingsScreen(
     val context = LocalContext.current
     val prefs = remember { Prefs.get(context) }
 
-    var overlayEnabled by remember { mutableStateOf(prefs.overlayEnabled) }
     var reapply by remember { mutableStateOf(prefs.reapplyOnUnlock) }
     var autoSafety by remember { mutableStateOf(prefs.autoSafetyEnabled) }
     var tempLimit by remember { mutableIntStateOf(prefs.tempLimitC) }
     var battLimit by remember { mutableIntStateOf(prefs.batteryLimitPct) }
-    val metrics = remember { mutableStateListOf<String>().apply { addAll(prefs.floatingMetrics) } }
-    var floatMode by remember { mutableStateOf(prefs.floatingMode) }
-    var opacity by remember { mutableIntStateOf(prefs.floatingOpacity) }
-    var floatSize by remember { mutableIntStateOf(prefs.floatingSize) }
 
     Column(
         modifier
@@ -114,79 +93,6 @@ fun SettingsScreen(
                 checked = dynamicColor,
                 onCheckedChange = onDynamicColorChange,
                 enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-            )
-        }
-
-        // Floating window
-        SectionHeader("Floating window")
-        TurboCard {
-            SettingSwitch(
-                title = "Enable floating panel",
-                description = "A draggable panel over other apps.",
-                checked = overlayEnabled,
-                onCheckedChange = { want ->
-                    if (want && !hasOverlayPermission()) {
-                        onRequestOverlayPermission()
-                    } else {
-                        overlayEnabled = want
-                        prefs.overlayEnabled = want
-                        TurboService.sync(context)
-                    }
-                }
-            )
-            Text(
-                "Metrics to show",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Dimens.SpaceS)
-            )
-            METRICS.forEach { m ->
-                val checked = metrics.contains(m.key)
-                SettingCheckRow(
-                    title = m.label,
-                    checked = checked,
-                    onCheckedChange = { on ->
-                        if (on) metrics.add(m.key) else metrics.remove(m.key)
-                        prefs.floatingMetrics = metrics.toSet()
-                        TurboService.sync(context)
-                    }
-                )
-            }
-
-            Text(
-                "Layout",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Dimens.SpaceS)
-            )
-            SegmentedControl(
-                options = listOf("Compact", "Horizontal", "Vertical"),
-                selectedIndex = when (floatMode) {
-                    Prefs.MODE_COMPACT -> 0
-                    Prefs.MODE_VERTICAL -> 2
-                    else -> 1
-                },
-                onSelect = {
-                    floatMode = when (it) {
-                        0 -> Prefs.MODE_COMPACT
-                        2 -> Prefs.MODE_VERTICAL
-                        else -> Prefs.MODE_HORIZONTAL
-                    }
-                    prefs.floatingMode = floatMode
-                },
-                modifier = Modifier.padding(vertical = Dimens.SpaceS)
-            )
-            LimitSlider(
-                label = "Opacity: $opacity%",
-                value = opacity.toFloat(),
-                range = 20f..100f,
-                onChange = { opacity = it.toInt(); prefs.floatingOpacity = opacity }
-            )
-            LimitSlider(
-                label = "Size: $floatSize%",
-                value = floatSize.toFloat(),
-                range = 80f..140f,
-                onChange = { floatSize = it.toInt(); prefs.floatingSize = floatSize }
             )
         }
 
@@ -262,7 +168,7 @@ fun SettingsScreen(
 
             if (!hasUsage && (autoRam || restrictBg)) {
                 Text(
-                    "Needs \"Usage access\" to detect games \u2014 tap to grant.",
+                    "Needs \"Usage access\" to detect games — tap to grant.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier
@@ -326,7 +232,7 @@ fun SettingsScreen(
             )
             if (autoSafety) {
                 LimitSlider(
-                    label = "Temperature limit: $tempLimit \u00B0C",
+                    label = "Temperature limit: $tempLimit °C",
                     value = tempLimit.toFloat(),
                     range = 40f..60f,
                     onChange = { tempLimit = it.toInt(); prefs.tempLimitC = tempLimit }
@@ -366,16 +272,3 @@ private fun shizukuStatus(state: FpsSampler.State): Pair<String, Color> =
         FpsSampler.State.ERROR -> "Error" to TurboRed
         FpsSampler.State.UNAVAILABLE -> "Not paired" to TurboRed
     }
-
-@Composable
-private fun LimitSlider(
-    label: String,
-    value: Float,
-    range: ClosedFloatingPointRange<Float>,
-    onChange: (Float) -> Unit
-) {
-    Column(Modifier.fillMaxWidth()) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
-        Slider(value = value, onValueChange = onChange, valueRange = range)
-    }
-}

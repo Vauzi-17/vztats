@@ -1,6 +1,10 @@
 package com.vauzi.clocklock.ui
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -17,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -25,7 +31,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -311,6 +321,109 @@ fun Badge(text: String, tint: Color = MaterialTheme.colorScheme.primary) {
             .background(tint.copy(alpha = 0.16f))
             .padding(horizontal = Dimens.SpaceS, vertical = 3.dp)
     )
+}
+
+/** Compact circular ring gauge — center value + sublabel, used by category cards. */
+@Composable
+fun RingStat(
+    fraction: Float,
+    centerValue: String,
+    subLabel: String,
+    active: Boolean = true,
+    modifier: Modifier = Modifier,
+    centerFontSize: androidx.compose.ui.unit.TextUnit = 20.sp
+) {
+    val track = MaterialTheme.colorScheme.outlineVariant
+    val arcColor by animateColorAsState(
+        if (active) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+        label = "ring-arc"
+    )
+    val animFraction by animateFloatAsState(
+        targetValue = fraction.coerceIn(0f, 1f),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "ring-frac"
+    )
+
+    Box(modifier.aspectRatio(1f), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxWidth().aspectRatio(1f)) {
+            val stroke = size.minDimension * 0.11f
+            val inset = stroke / 2f
+            val arcSize = Size(size.width - stroke, size.height - stroke)
+            val topLeft = Offset(inset, inset)
+            val start = 135f
+            val sweep = 270f
+            drawArc(
+                color = track,
+                startAngle = start,
+                sweepAngle = sweep,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(width = stroke, cap = StrokeCap.Round)
+            )
+            drawArc(
+                color = arcColor,
+                startAngle = start,
+                sweepAngle = sweep * animFraction,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(width = stroke, cap = StrokeCap.Round)
+            )
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = centerValue,
+                fontFamily = NumberFont,
+                fontWeight = FontWeight.Bold,
+                fontSize = centerFontSize,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = subLabel,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+/** Small clickable pill used for multi-select option lists (e.g. floating metrics). */
+@Composable
+fun ToggleChip(text: String, selected: Boolean, onClick: () -> Unit) {
+    val tint = MaterialTheme.colorScheme.primary
+    val bg = if (selected) tint.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surface
+    val fg = if (selected) tint else MaterialTheme.colorScheme.onSurfaceVariant
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = fg,
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(bg)
+            .border(1.dp, if (selected) tint.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = Dimens.SpaceM, vertical = Dimens.SpaceS)
+    )
+}
+
+@Composable
+fun LimitSlider(
+    label: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    onChange: (Float) -> Unit
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Slider(value = value, onValueChange = onChange, valueRange = range)
+    }
 }
 
 @Composable
