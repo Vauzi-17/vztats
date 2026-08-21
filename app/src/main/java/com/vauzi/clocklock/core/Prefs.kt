@@ -96,6 +96,11 @@ class Prefs private constructor(private val sp: SharedPreferences) {
         get() = sp.getInt(KEY_FLOAT_SIZE, DEFAULT_SIZE)
         set(value) = sp.edit().putInt(KEY_FLOAT_SIZE, value).apply()
 
+    /** Which metric the compact pill shows. Empty = first enabled metric. */
+    var floatingCompactMetric: String
+        get() = sp.getString(KEY_FLOAT_COMPACT_METRIC, "") ?: ""
+        set(value) = sp.edit().putString(KEY_FLOAT_COMPACT_METRIC, value).apply()
+
     fun registerListener(l: SharedPreferences.OnSharedPreferenceChangeListener) =
         sp.registerOnSharedPreferenceChangeListener(l)
 
@@ -120,6 +125,7 @@ class Prefs private constructor(private val sp: SharedPreferences) {
         const val KEY_FLOAT_MODE = "floating_mode"
         const val KEY_FLOAT_OPACITY = "floating_opacity"
         const val KEY_FLOAT_SIZE = "floating_size"
+        const val KEY_FLOAT_COMPACT_METRIC = "floating_compact_metric"
 
         const val DEFAULT_TEMP_LIMIT = 48
         const val DEFAULT_BATT_LIMIT = 15
@@ -142,6 +148,7 @@ class Prefs private constructor(private val sp: SharedPreferences) {
         const val METRIC_FPS = "fps"
         const val METRIC_BATT_POWER = "batt_power"
         const val METRIC_BATT_TEMP = "batt_temp"
+        const val METRIC_BATT_PCT = "batt_pct"
         const val METRIC_RAM = "ram"
 
         val DEFAULT_METRICS: Set<String> =

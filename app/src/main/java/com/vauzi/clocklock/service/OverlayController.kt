@@ -20,6 +20,7 @@ import com.vauzi.clocklock.core.PowerSample
 import com.vauzi.clocklock.core.Prefs
 import com.vauzi.clocklock.core.TurboManager
 import kotlin.math.roundToInt
+import java.util.Locale
 
 /**
  * Customisable floating panel. Three layouts (compact pill, horizontal bar,
@@ -139,7 +140,9 @@ class OverlayController(private val context: Context) {
     }
 
     private fun applyValues() {
-        for ((key, tv) in valueViews) tv.text = metricValue(key)
+        for ((key, tv) in valueViews) {
+            tv.text = if (mode == Prefs.MODE_HORIZONTAL) metricValueShort(key) else metricValue(key)
+        }
         pillValue?.text = collapsedText()
     }
 
@@ -171,6 +174,10 @@ class OverlayController(private val context: Context) {
             textSize = 13f * scale
             typeface = Typeface.MONOSPACE
             setPadding(dp(8f), 0, 0, 0)
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
+        compactMetricKey()?.let { key ->
+            value.minWidth = value.paint.measureText(metricSampleLong(key)).toInt() + dp(2f)
         }
         dot = d; pillValue = value
         return LinearLayout(context).apply {
@@ -219,7 +226,9 @@ class OverlayController(private val context: Context) {
             setTextColor(TEXT)
             textSize = 13f * scale
             typeface = Typeface.MONOSPACE
+            gravity = Gravity.END
         }
+        value.minWidth = value.paint.measureText(metricSampleLong(key)).toInt() + dp(1f)
         valueViews[key] = value
         return LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -272,7 +281,10 @@ class OverlayController(private val context: Context) {
 
     /** Uniformly scales text sizes, paddings and margins of a view subtree. */
     private fun scaleViews(v: View, f: Float) {
-        if (v is TextView) v.setTextSize(TypedValue.COMPLEX_UNIT_PX, v.textSize * f)
+        if (v is TextView) {
+            v.setTextSize(TypedValue.COMPLEX_UNIT_PX, v.textSize * f)
+            if (v.minWidth > 0) v.minWidth = (v.minWidth * f).toInt()
+        }
         v.setPadding(
             (v.paddingLeft * f).toInt(), (v.paddingTop * f).toInt(),
             (v.paddingRight * f).toInt(), (v.paddingBottom * f).toInt()
@@ -340,6 +352,16 @@ class OverlayController(private val context: Context) {
             letterSpacing = 0.06f
             gravity = Gravity.CENTER_HORIZONTAL
         }
+        // Reserve the worst-case width up front (before real values are set by
+        // applyValues()) so both the layout never jitters as digits change AND
+        // the single-line overflow measurement below is accurate rather than
+        // based on still-empty TextViews.
+        val cellWidth = maxOf(
+            value.paint.measureText(metricSampleShort(key)),
+            label.paint.measureText(label.text.toString())
+        ).toInt() + dp(1f)
+        value.minWidth = cellWidth
+        label.minWidth = cellWidth
         valueViews[key] = value
         return LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -418,8 +440,17 @@ class OverlayController(private val context: Context) {
             Prefs.METRIC_FPS,
             Prefs.METRIC_GPU_FREQ, Prefs.METRIC_GPU_TEMP,
             Prefs.METRIC_CPU_FREQ, Prefs.METRIC_CPU_TEMP,
-            Prefs.METRIC_BATT_POWER, Prefs.METRIC_BATT_TEMP, Prefs.METRIC_RAM
+            Prefs.METRIC_BATT_POWER, Prefs.METRIC_BATT_TEMP, Prefs.METRIC_BATT_PCT,
+            Prefs.METRIC_RAM
         ).filter { it in enabled }
+    }
+
+    /** Which metric the compact pill shows — the user's pick if still enabled, else the first. */
+    private fun compactMetricKey(): String? {
+        val enabled = orderedMetrics()
+        if (enabled.isEmpty()) return null
+        val picked = prefs.floatingCompactMetric
+        return picked.takeIf { it in enabled } ?: enabled.first()
     }
 
     private fun metricLabel(key: String): String = when (key) {
@@ -430,10 +461,12 @@ class OverlayController(private val context: Context) {
         Prefs.METRIC_CPU_TEMP -> "CPU °C"
         Prefs.METRIC_BATT_POWER -> "mA"
         Prefs.METRIC_BATT_TEMP -> "BAT °C"
+        Prefs.METRIC_BATT_PCT -> "BAT %"
         Prefs.METRIC_RAM -> "RAM"
         else -> key
     }
 
+    /** Full text with unit — used where there's room (vertical rows, compact pill). */
     private fun metricValue(key: String): String = when (key) {
         Prefs.METRIC_FPS -> lastFps?.toString() ?: "—"
         Prefs.METRIC_GPU_FREQ -> lastGpu?.freqMhz?.let { "$it MHz" } ?: "—"
@@ -442,14 +475,47 @@ class OverlayController(private val context: Context) {
         Prefs.METRIC_CPU_TEMP -> lastCpu?.tempC?.let { "${it.roundToInt()}°" } ?: "—"
         Prefs.METRIC_BATT_POWER -> lastPower?.currentMa?.let { "$it mA" } ?: "—"
         Prefs.METRIC_BATT_TEMP -> lastPower?.batteryTempC?.let { "${it.roundToInt()}°" } ?: "—"
+        Prefs.METRIC_BATT_PCT -> lastPower?.batteryPct?.let { "$it%" } ?: "—"
         Prefs.METRIC_RAM -> lastPower?.ramUsedGbText?.let { "$it GB" } ?: "—"
         else -> "—"
     }
 
+    /** Unit-less text — used in the horizontal bar, where the label below already says what it is. */
+    private fun metricValueShort(key: String): String = when (key) {
+        Prefs.METRIC_CPU_FREQ -> lastCpu?.freqMhz?.let { String.format(Locale.ROOT, "%.2f", it / 1000f) } ?: "—"
+        Prefs.METRIC_GPU_FREQ -> lastGpu?.freqMhz?.toString() ?: "—"
+        Prefs.METRIC_BATT_POWER -> lastPower?.currentMa?.toString() ?: "—"
+        Prefs.METRIC_RAM -> lastPower?.ramUsedGbText ?: "—"
+        else -> metricValue(key)
+    }
+
+    /** Widest plausible full-text value, used to reserve a jitter-free width. */
+    private fun metricSampleLong(key: String): String = when (key) {
+        Prefs.METRIC_FPS -> "999"
+        Prefs.METRIC_GPU_FREQ -> "9999 MHz"
+        Prefs.METRIC_GPU_TEMP -> "99°"
+        Prefs.METRIC_CPU_FREQ -> "9.99 GHz"
+        Prefs.METRIC_CPU_TEMP -> "99°"
+        Prefs.METRIC_BATT_POWER -> "9999 mA"
+        Prefs.METRIC_BATT_TEMP -> "99°"
+        Prefs.METRIC_BATT_PCT -> "100%"
+        Prefs.METRIC_RAM -> "99.9 GB"
+        else -> "999"
+    }
+
+    /** Widest plausible short-text value (no unit), same idea for the horizontal bar. */
+    private fun metricSampleShort(key: String): String = when (key) {
+        Prefs.METRIC_GPU_FREQ -> "9999"
+        Prefs.METRIC_CPU_FREQ -> "9.99"
+        Prefs.METRIC_BATT_POWER -> "9999"
+        Prefs.METRIC_RAM -> "99.9"
+        else -> metricSampleLong(key)
+    }
+
     private fun collapsedText(): String {
-        val first = orderedMetrics().firstOrNull()
+        val key = compactMetricKey()
             ?: return if (TurboManager.state.value.desiredOn) "ON" else "OFF"
-        return metricValue(first)
+        return metricValue(key)
     }
 
     // --- drawing helpers ------------------------------------------------------

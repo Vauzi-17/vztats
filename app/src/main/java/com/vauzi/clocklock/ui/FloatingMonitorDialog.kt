@@ -44,6 +44,7 @@ private val FLOAT_METRICS = listOf(
     FloatMetric(Prefs.METRIC_CPU_TEMP, "CPU temp"),
     FloatMetric(Prefs.METRIC_BATT_POWER, "Batt draw"),
     FloatMetric(Prefs.METRIC_BATT_TEMP, "Batt temp"),
+    FloatMetric(Prefs.METRIC_BATT_PCT, "Batt %"),
     FloatMetric(Prefs.METRIC_RAM, "RAM")
 )
 
@@ -65,6 +66,7 @@ fun FloatingMonitorDialog(
     var floatMode by remember { mutableStateOf(prefs.floatingMode) }
     var opacity by remember { mutableIntStateOf(prefs.floatingOpacity) }
     var floatSize by remember { mutableIntStateOf(prefs.floatingSize) }
+    var compactMetric by remember { mutableStateOf(prefs.floatingCompactMetric) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -139,6 +141,30 @@ fun FloatingMonitorDialog(
                     }
                 )
 
+                if (floatMode == Prefs.MODE_COMPACT) {
+                    Text(
+                        "Pill shows",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    val pickable = FLOAT_METRICS.filter { metrics.contains(it.key) }
+                    val effective = compactMetric.takeIf { it.isNotEmpty() && metrics.contains(it) }
+                        ?: pickable.firstOrNull()?.key
+                    if (pickable.isEmpty()) {
+                        Text(
+                            "Enable at least one metric above to choose.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        FlowRowChips(pickable, effective) { key ->
+                            compactMetric = key
+                            prefs.floatingCompactMetric = key
+                            TurboService.sync(context)
+                        }
+                    }
+                }
+
                 LimitSlider(
                     label = "Opacity: $opacity%",
                     value = opacity.toFloat(),
@@ -167,6 +193,21 @@ private fun FloatMetricChips(selected: List<String>, onToggle: (String, Boolean)
         FLOAT_METRICS.forEach { m ->
             val isOn = selected.contains(m.key)
             ToggleChip(text = m.label, selected = isOn, onClick = { onToggle(m.key, !isOn) })
+        }
+    }
+}
+
+/** Single-select chip row — used for picking the one metric the compact pill shows. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FlowRowChips(options: List<FloatMetric>, selectedKey: String?, onSelect: (String) -> Unit) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceS),
+        verticalArrangement = Arrangement.spacedBy(Dimens.SpaceS),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        options.forEach { m ->
+            ToggleChip(text = m.label, selected = m.key == selectedKey, onClick = { onSelect(m.key) })
         }
     }
 }
