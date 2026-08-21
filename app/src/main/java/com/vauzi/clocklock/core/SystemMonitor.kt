@@ -33,7 +33,7 @@ object SystemMonitor {
                 curKhzMax = CpuMonitor.curFreqKhzMax(),
                 maxKhz = cpuMaxKhz ?: CpuMonitor.maxFreqKhz(),
                 tempMilliC = CpuMonitor.cpuTempMilliC(),
-                usagePct = CpuMonitor.usagePercent()
+                perCore = CpuMonitor.perCore()
             ),
             power = PowerMonitor.read(context),
             fps = fps,

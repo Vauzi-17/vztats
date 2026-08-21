@@ -1,5 +1,6 @@
 package com.vauzi.clocklock.ui
 
+import android.os.Build
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,20 +19,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.WarningAmber
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,26 +34,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vauzi.clocklock.core.ApplyOutcome
+import com.vauzi.clocklock.core.CoreFreq
 import com.vauzi.clocklock.core.CpuMonitor
-import com.vauzi.clocklock.core.GpuDetails
 import com.vauzi.clocklock.core.GpuMonitor
 import com.vauzi.clocklock.core.NativeBridge
-import com.vauzi.clocklock.core.SessionRecorder
-import com.vauzi.clocklock.core.SessionStore
-import com.vauzi.clocklock.core.SessionSummary
 import com.vauzi.clocklock.core.SystemSample
 import com.vauzi.clocklock.core.TurboManager
 import com.vauzi.clocklock.core.TurboState
-import com.vauzi.clocklock.service.TurboService
 import com.vauzi.clocklock.ui.theme.Dimens
 import com.vauzi.clocklock.ui.theme.TurboAmber
 import com.vauzi.clocklock.ui.theme.TurboGreen
 import com.vauzi.clocklock.ui.theme.TurboRed
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @Composable
 fun HomeScreen(
@@ -72,6 +58,7 @@ fun HomeScreen(
     val gpu = sample?.gpu
     val cpu = sample?.cpu
     val power = sample?.power
+    val clusterLabel = cpu?.perCore?.takeIf { it.isNotEmpty() }?.let { CpuMonitor.clusterLabel(it) }
 
     Column(
         modifier
@@ -119,9 +106,9 @@ fun HomeScreen(
         TurboCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RingStat(
-                    fraction = (cpu?.usagePct ?: 0) / 100f,
-                    centerValue = cpu?.usagePct?.toString() ?: "—",
-                    subLabel = "%",
+                    fraction = cpu?.loadOfMax ?: 0f,
+                    centerValue = cpu?.freqMhz?.toString() ?: "—",
+                    subLabel = "MHz",
                     modifier = Modifier.size(84.dp)
                 )
                 Column(
@@ -130,8 +117,10 @@ fun HomeScreen(
                         .padding(start = Dimens.SpaceL),
                     verticalArrangement = Arrangement.spacedBy(Dimens.SpaceXS)
                 ) {
-                    Text("CPU", style = MaterialTheme.typography.titleSmall)
-                    CardStatLine("Clock", cpu?.freqMhz?.let { "%.2f GHz".format(it / 1000f) } ?: "—")
+                    Text(
+                        if (clusterLabel.isNullOrEmpty()) "CPU" else "CPU ($clusterLabel)",
+                        style = MaterialTheme.typography.titleSmall
+                    )
                     CardStatLine("Max", cpu?.maxMhz?.let { "%.2f GHz".format(it / 1000f) } ?: "—")
                     CardStatLine(
                         "Temp",
@@ -139,6 +128,10 @@ fun HomeScreen(
                         tempAccent(cpu?.tempC)
                     )
                 }
+            }
+            if (!cpu?.perCore.isNullOrEmpty()) {
+                Spacer(Modifier.height(Dimens.SpaceM))
+                CoreGrid(cpu!!.perCore)
             }
         }
 
@@ -235,85 +228,74 @@ fun HomeScreen(
             )
         }
 
-        // --- Session recorder ---------------------------------------------------
-        val recording by SessionRecorder.recording.collectAsStateWithLifecycle()
-        var refreshTick by remember { mutableIntStateOf(0) }
-
-        SectionHeader("Session recorder")
-        Button(
-            onClick = {
-                if (recording) {
-                    SessionRecorder.stop(context)
-                    refreshTick++
-                } else {
-                    SessionRecorder.start()
-                    TurboService.sync(context)
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(if (recording) "Stop & save" else "Record session")
-        }
-        if (recording) {
-            Text(
-                "Recording… keep the game in the foreground.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+        // --- Device info ---------------------------------------------------------
+        SectionHeader("Device info")
+        val fullySupported = NativeBridge.available && GpuMonitor.isSupported
+        if (!fullySupported) {
+            BannerCard(
+                icon = Icons.Filled.WarningAmber,
+                title = "Some interfaces missing",
+                subtitle = "Turbo may not work reliably on this device.",
+                tone = TurboRed
             )
         }
-
-        val sessions = remember(recording, refreshTick) { SessionStore.list(context) }
-        if (sessions.isNotEmpty()) {
-            sessions.take(8).forEach { s ->
-                SessionRow(s) {
-                    SessionStore.delete(context, s.id)
-                    refreshTick++
-                }
-            }
-        }
-
-        // --- Hardware & compatibility (collapsible) ------------------------------
-        var detailsExpanded by remember { mutableStateOf(false) }
-        SectionHeader("Hardware & compatibility")
-        NavRow(
-            title = "GPU hardware details",
-            subtitle = "Compatibility checks, frequency table, governor info",
-            actionLabel = if (detailsExpanded) "Hide" else "Show",
-            onClick = { detailsExpanded = !detailsExpanded }
-        )
-        if (detailsExpanded) {
-            val details = remember { GpuMonitor.readDetails() }
-            val effectiveMax = gpu?.maxFreqMhz ?: details.observedMaxMhz
-            val fullySupported = NativeBridge.available && GpuMonitor.isSupported
-            if (!fullySupported) {
-                BannerCard(
-                    icon = Icons.Filled.WarningAmber,
-                    title = "Some interfaces missing",
-                    subtitle = "Turbo may not work reliably on this device.",
-                    tone = TurboRed
-                )
-            }
-            TurboCard {
-                IconListRow(
-                    icon = if (NativeBridge.available) Icons.Filled.Check else Icons.Filled.Close,
-                    iconTint = if (NativeBridge.available) TurboGreen else TurboRed,
-                    title = "Native turbo library"
-                )
-                IconListRow(
-                    icon = if (GpuMonitor.isSupported) Icons.Filled.Check else Icons.Filled.Close,
-                    iconTint = if (GpuMonitor.isSupported) TurboGreen else TurboRed,
-                    title = "GPU frequency readable"
-                )
-                IconListRow(
-                    icon = if (CpuMonitor.isSupported) Icons.Filled.Check else Icons.Filled.Close,
-                    iconTint = if (CpuMonitor.isSupported) TurboGreen else TurboRed,
-                    title = "CPU frequency readable"
-                )
-            }
-            TurboCard { GpuDetailsBody(details, effectiveMax) }
+        TurboCard {
+            val details = GpuMonitor.readDetails()
+            val gpuMax = details.ceilingMhz ?: details.observedMaxMhz
+            InfoRow("GPU model", details.model ?: "—")
+            InfoRow("GPU max clock", gpuMax?.let { "$it MHz" } ?: "—")
+            InfoRow("GPU governor", details.governor ?: "—")
+            InfoRow(
+                "CPU cores",
+                if (clusterLabel.isNullOrEmpty()) "${CpuMonitor.coreCount}"
+                else "${CpuMonitor.coreCount} ($clusterLabel)"
+            )
+            InfoRow(
+                "CPU max clock",
+                cpu?.perCore?.mapNotNull { it.maxMhz }?.maxOrNull()?.let { "$it MHz" } ?: "—"
+            )
+            InfoRow("Android", "${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
+            InfoRow("Kernel", System.getProperty("os.version") ?: "—")
+            InfoRow("Device", "${Build.MANUFACTURER} ${Build.MODEL}")
         }
 
         Spacer(Modifier.height(Dimens.NavBarClearance))
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CoreGrid(cores: List<CoreFreq>) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceS),
+        verticalArrangement = Arrangement.spacedBy(Dimens.SpaceS),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        cores.forEach { c -> CoreChip(c) }
+    }
+}
+
+@Composable
+private fun CoreChip(c: CoreFreq) {
+    Column(
+        Modifier
+            .clip(RoundedCornerShape(Dimens.RadiusS))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = Dimens.SpaceS, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            "C${c.index}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            c.curMhz?.toString() ?: "—",
+            style = MaterialTheme.typography.labelMedium,
+            fontFamily = NumberFont,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 
@@ -366,134 +348,6 @@ private fun PowerButton(on: Boolean, onToggle: () -> Unit) {
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.5.sp
         )
-    }
-}
-
-@Composable
-private fun SessionRow(s: SessionSummary, onDelete: () -> Unit) {
-    TurboCard(padding = Dimens.SpaceM, radius = Dimens.RadiusM) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                SimpleDateFormat("dd MMM • HH:mm", Locale.getDefault()).format(Date(s.startedAtMs)),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                "${s.durationSec}s",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                "  ✕",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.clickable { onDelete() }
-            )
-        }
-        Text(
-            buildString {
-                s.gpuMaxMhz?.let { append("GPU max ${it}MHz  ") }
-                s.gpuMaxTempC?.let { append("GPU ${it.toInt()}°  ") }
-                s.cpuMaxTempC?.let { append("CPU ${it.toInt()}°  ") }
-                s.avgFps?.let { append("avg ${it}fps  ") }
-                s.minFps?.let { append("min ${it}fps  ") }
-                s.throttlePct?.let { append("throttle ${it}%") }
-            }.ifBlank { "No metrics captured." },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = Dimens.SpaceXS)
-        )
-    }
-}
-
-@Composable
-private fun GpuDetailsBody(d: GpuDetails, effectiveMax: Int?) {
-    InfoRow("Model", d.model ?: "—")
-
-    if (d.staticTableBlocked) {
-        InfoRow(
-            "Observed max (live)",
-            effectiveMax?.let { "$it MHz" } ?: "—",
-            valueColor = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            "This device blocks reading the static KGSL table. " +
-                    "The observed max above is read live from gpuclk.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = Dimens.SpaceM)
-        )
-    } else {
-        InfoRow(
-            "Ceiling (top bin)",
-            d.ceilingMhz?.let { "$it MHz" } ?: "—",
-            valueColor = MaterialTheme.colorScheme.primary
-        )
-        if (d.cappedBelowCeiling) {
-            InfoRow("Active max clamp", "${d.maxClampMhz} MHz", valueColor = TurboAmber)
-        }
-        InfoRow("Governor", d.governor ?: "—")
-        InfoRow("Power levels", d.numPwrLevels?.toString() ?: "—")
-        InfoRow("Thermal-limited level", d.thermalPwrLevel?.toString() ?: "—")
-        if (d.availableFreqsMhz.isNotEmpty()) {
-            Text(
-                "Frequency table (MHz)",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Dimens.SpaceM, bottom = Dimens.SpaceS)
-            )
-            FreqTable(d.availableFreqsMhz, top = d.ceilingMhz)
-        }
-    }
-
-    Text(
-        verdictFor(d, effectiveMax),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(top = Dimens.SpaceM)
-    )
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun FreqTable(freqs: List<Int>, top: Int?) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        freqs.forEach { mhz ->
-            val isTop = mhz == top
-            Text(
-                text = mhz.toString(),
-                fontFamily = NumberFont,
-                fontSize = 12.sp,
-                color = if (isTop) MaterialTheme.colorScheme.onPrimary
-                else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(Dimens.RadiusS - 4.dp))
-                    .background(
-                        if (isTop) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surface
-                    )
-                    .padding(horizontal = 9.dp, vertical = 5.dp)
-            )
-        }
-    }
-}
-
-private fun verdictFor(d: GpuDetails, effectiveMax: Int?): String {
-    val kernelNote = "True overclock requires a custom kernel."
-    return when {
-        d.staticTableBlocked && effectiveMax != null ->
-            "Observed ceiling so far is $effectiveMax MHz — turbo already targets it. $kernelNote"
-        d.staticTableBlocked ->
-            "Turn on turbo or run a game so the GPU reaches its peak. $kernelNote"
-        d.cappedBelowCeiling ->
-            "Active max clamp (${d.maxClampMhz} MHz) sits below the ${d.ceilingMhz} MHz ceiling. $kernelNote"
-        d.ceilingMhz != null ->
-            "Turbo targets the top bin (${d.ceilingMhz} MHz). $kernelNote"
-        else -> "Couldn’t read the frequency table on this device."
     }
 }
 

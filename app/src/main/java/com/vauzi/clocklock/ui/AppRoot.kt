@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.PictureInPictureAlt
@@ -50,6 +51,7 @@ import com.vauzi.clocklock.ui.theme.ThemeMode
 
 private enum class Dest(val label: String, val icon: ImageVector) {
     HOME("Home", Icons.Filled.Home),
+    SESSIONS("Sessions", Icons.Filled.History),
     SETTINGS("Settings", Icons.Filled.Tune)
 }
 
@@ -95,6 +97,7 @@ fun AppRoot(
             Box(Modifier.weight(1f)) {
                 when (current) {
                     Dest.HOME -> HomeScreen(turboState = turboState, sample = sample, history = history)
+                    Dest.SESSIONS -> SessionsScreen()
                     Dest.SETTINGS -> SettingsScreen(
                         themeMode = themeMode,
                         dynamicColor = dynamicColor,
