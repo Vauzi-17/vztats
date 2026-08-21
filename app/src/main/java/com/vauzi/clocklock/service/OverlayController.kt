@@ -328,19 +328,15 @@ class OverlayController(private val context: Context) {
     // --- HORIZONTAL -----------------------------------------------------------
 
     private fun buildHorizontal(): LinearLayout {
-        val d = View(context).apply {
-            layoutParams = LinearLayout.LayoutParams(dp(8f), dp(8f)).apply {
-                rightMargin = dp(9f)
-            }
-            background = circle(OFF_DOT)
-        }
-        dot = d
+        // No leading status dot here — it was eating width that mattered more
+        // for fitting every metric on one line. Turbo state is still visible
+        // via the Lock button once the row is tapped open.
+        dot = null
 
-        // Single row of icon-badge + value pairs, separated by hairline dividers.
+        // Single row of label + value pairs, separated by hairline dividers.
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            addView(d)
         }
         orderedMetrics().forEachIndexed { i, key ->
             if (i > 0) row.addView(divider())
@@ -350,11 +346,11 @@ class OverlayController(private val context: Context) {
         // Measure the natural width; if it overflows, shrink everything uniformly
         // so all metrics stay on ONE line instead of wrapping. Budget against
         // where the panel actually sits on screen (it may have been dragged),
-        // not just a flat guess — the outer capsule's own padding (dp(12f) each
-        // side, matching the padding set below) and a bit of edge breathing room
-        // both come out of the same screen width the row has to fit in.
-        val outerPadding = dp(12f) * 2
-        val edgeSafety = dp(14f)
+        // not just a flat guess — the outer capsule's own padding (matching the
+        // padding set below) and a bit of edge breathing room both come out of
+        // the same screen width the row has to fit in.
+        val outerPadding = dp(10f) * 2
+        val edgeSafety = dp(20f)
         val maxW = context.resources.displayMetrics.widthPixels -
             (if (::params.isInitialized) params.x else dpRaw(16)) - outerPadding - edgeSafety
         row.measure(
@@ -369,7 +365,7 @@ class OverlayController(private val context: Context) {
         return LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             background = roundedFill(SURFACE, dp(16f), STROKE)
-            setPadding(dp(12f), dp(8f), dp(12f), dp(8f))
+            setPadding(dp(10f), dp(8f), dp(10f), dp(8f))
             addView(row)
             if (showButton) addView(controlRow(topMargin = dp(6f)))
             setOnClickListener { if (!showButton) { showButton = true; rebuild() } }
@@ -379,7 +375,7 @@ class OverlayController(private val context: Context) {
     /** Thin vertical separator between horizontal-bar cells, Red Magic-style. */
     private fun divider(): View = View(context).apply {
         layoutParams = LinearLayout.LayoutParams(dp(1f), dp(14f)).apply {
-            leftMargin = dp(7f); rightMargin = dp(7f)
+            leftMargin = dp(4f); rightMargin = dp(4f)
         }
         setBackgroundColor(STROKE)
     }
