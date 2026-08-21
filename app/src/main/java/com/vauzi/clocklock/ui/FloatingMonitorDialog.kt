@@ -39,13 +39,16 @@ private data class FloatMetric(val key: String, val label: String)
 private val FLOAT_METRICS = listOf(
     FloatMetric(Prefs.METRIC_FPS, "FPS"),
     FloatMetric(Prefs.METRIC_GPU_FREQ, "GPU freq"),
+    FloatMetric(Prefs.METRIC_GPU_LOAD, "GPU %"),
     FloatMetric(Prefs.METRIC_GPU_TEMP, "GPU temp"),
     FloatMetric(Prefs.METRIC_CPU_FREQ, "CPU freq"),
+    FloatMetric(Prefs.METRIC_CPU_LOAD, "CPU %"),
     FloatMetric(Prefs.METRIC_CPU_TEMP, "CPU temp"),
     FloatMetric(Prefs.METRIC_BATT_POWER, "Batt draw"),
     FloatMetric(Prefs.METRIC_BATT_TEMP, "Batt temp"),
     FloatMetric(Prefs.METRIC_BATT_PCT, "Batt %"),
-    FloatMetric(Prefs.METRIC_RAM, "RAM")
+    FloatMetric(Prefs.METRIC_RAM, "RAM"),
+    FloatMetric(Prefs.METRIC_RAM_PCT, "RAM %")
 )
 
 /**

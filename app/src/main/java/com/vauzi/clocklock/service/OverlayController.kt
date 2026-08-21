@@ -152,7 +152,7 @@ class OverlayController(private val context: Context) {
         statusText?.text = if (on) "ON" else "OFF"
         statusText?.setTextColor(if (on) ACCENT else MUTED)
         toggleBtn?.let {
-            it.text = if (on) "TURBO ON" else "TURN ON"
+            it.text = if (on) "LOCK ON" else "LOCK OFF"
             it.background = roundedFill(if (on) ACCENT else BTN_OFF_BG, dp(11f))
             it.setTextColor(if (on) BTN_ON_TEXT else TEXT)
         }
@@ -208,7 +208,7 @@ class OverlayController(private val context: Context) {
         })
         for (key in orderedMetrics()) panel.addView(verticalRow(key))
 
-        if (compact || showButton) panel.addView(toggleButton(topMargin = dp(10f)))
+        if (compact || showButton) panel.addView(controlRow(showClose = false, topMargin = dp(10f)))
         if (!compact) {
             panel.setOnClickListener { if (!showButton) { showButton = true; rebuild() } }
         }
@@ -274,7 +274,7 @@ class OverlayController(private val context: Context) {
             background = roundedFill(SURFACE, dp(16f), STROKE)
             setPadding(dp(13f), dp(8f), dp(13f), dp(8f))
             addView(row)
-            if (showButton) addView(controlRow())
+            if (showButton) addView(controlRow(topMargin = dp(6f)))
             setOnClickListener { if (!showButton) { showButton = true; rebuild() } }
         }
     }
@@ -298,14 +298,19 @@ class OverlayController(private val context: Context) {
         }
     }
 
-    private fun controlRow(): LinearLayout = LinearLayout(context).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        setPadding(0, dp(8f), 0, dp(1f))
-        addView(toggleButton(topMargin = 0, compactChip = true))
-        addView(ramChip())
-        addView(closeChip())
-    }
+    private fun controlRow(showClose: Boolean = true, topMargin: Int = 0): LinearLayout =
+        LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(8f), 0, dp(1f))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { this.topMargin = topMargin }
+            addView(toggleButton())
+            addView(ramChip())
+            if (showClose) addView(closeChip())
+        }
 
     /** Frees background RAM. The foreground game is never killed by this. */
     private fun ramChip(): TextView {
@@ -404,20 +409,12 @@ class OverlayController(private val context: Context) {
         }
     }
 
-    private fun toggleButton(topMargin: Int, compactChip: Boolean = false): TextView {
+    private fun toggleButton(): TextView {
         val btn = TextView(context).apply {
             gravity = Gravity.CENTER
-            textSize = (if (compactChip) 11f else 13f) * scale
+            textSize = 11f * scale
             setTypeface(Typeface.DEFAULT_BOLD)
-            if (compactChip) {
-                setPadding(dp(12f), dp(6f), dp(12f), dp(6f))
-            } else {
-                setPadding(0, dp(10f), 0, dp(10f))
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { this.topMargin = topMargin }
-            }
+            setPadding(dp(12f), dp(6f), dp(12f), dp(6f))
             setOnClickListener { TurboManager.toggle(context); refresh() }
         }
         toggleBtn = btn
@@ -438,10 +435,10 @@ class OverlayController(private val context: Context) {
         val enabled = prefs.floatingMetrics
         return listOf(
             Prefs.METRIC_FPS,
-            Prefs.METRIC_GPU_FREQ, Prefs.METRIC_GPU_TEMP,
-            Prefs.METRIC_CPU_FREQ, Prefs.METRIC_CPU_TEMP,
+            Prefs.METRIC_GPU_FREQ, Prefs.METRIC_GPU_LOAD, Prefs.METRIC_GPU_TEMP,
+            Prefs.METRIC_CPU_FREQ, Prefs.METRIC_CPU_LOAD, Prefs.METRIC_CPU_TEMP,
             Prefs.METRIC_BATT_POWER, Prefs.METRIC_BATT_TEMP, Prefs.METRIC_BATT_PCT,
-            Prefs.METRIC_RAM
+            Prefs.METRIC_RAM, Prefs.METRIC_RAM_PCT
         ).filter { it in enabled }
     }
 
@@ -453,16 +450,26 @@ class OverlayController(private val context: Context) {
         return picked.takeIf { it in enabled } ?: enabled.first()
     }
 
+    private fun ramPct(): Int? {
+        val p = lastPower ?: return null
+        val used = p.ramUsedMb ?: return null
+        val total = p.ramTotalMb?.takeIf { it > 0 } ?: return null
+        return (used * 100 / total).coerceIn(0, 100)
+    }
+
     private fun metricLabel(key: String): String = when (key) {
         Prefs.METRIC_FPS -> "FPS"
         Prefs.METRIC_GPU_FREQ -> "GPU"
+        Prefs.METRIC_GPU_LOAD -> "GPU %"
         Prefs.METRIC_GPU_TEMP -> "GPU °C"
         Prefs.METRIC_CPU_FREQ -> "CPU"
+        Prefs.METRIC_CPU_LOAD -> "CPU %"
         Prefs.METRIC_CPU_TEMP -> "CPU °C"
         Prefs.METRIC_BATT_POWER -> "mA"
         Prefs.METRIC_BATT_TEMP -> "BAT °C"
         Prefs.METRIC_BATT_PCT -> "BAT %"
         Prefs.METRIC_RAM -> "RAM"
+        Prefs.METRIC_RAM_PCT -> "RAM %"
         else -> key
     }
 
@@ -470,13 +477,16 @@ class OverlayController(private val context: Context) {
     private fun metricValue(key: String): String = when (key) {
         Prefs.METRIC_FPS -> lastFps?.toString() ?: "—"
         Prefs.METRIC_GPU_FREQ -> lastGpu?.freqMhz?.let { "$it MHz" } ?: "—"
+        Prefs.METRIC_GPU_LOAD -> lastGpu?.loadOfMax?.let { "${(it * 100).roundToInt()}%" } ?: "—"
         Prefs.METRIC_GPU_TEMP -> lastGpu?.tempC?.let { "${it.roundToInt()}°" } ?: "—"
         Prefs.METRIC_CPU_FREQ -> lastCpu?.freqGhzText ?: "—"
+        Prefs.METRIC_CPU_LOAD -> lastCpu?.loadOfMax?.let { "${(it * 100).roundToInt()}%" } ?: "—"
         Prefs.METRIC_CPU_TEMP -> lastCpu?.tempC?.let { "${it.roundToInt()}°" } ?: "—"
         Prefs.METRIC_BATT_POWER -> lastPower?.currentMa?.let { "$it mA" } ?: "—"
         Prefs.METRIC_BATT_TEMP -> lastPower?.batteryTempC?.let { "${it.roundToInt()}°" } ?: "—"
         Prefs.METRIC_BATT_PCT -> lastPower?.batteryPct?.let { "$it%" } ?: "—"
         Prefs.METRIC_RAM -> lastPower?.ramUsedGbText?.let { "$it GB" } ?: "—"
+        Prefs.METRIC_RAM_PCT -> ramPct()?.let { "$it%" } ?: "—"
         else -> "—"
     }
 
@@ -493,12 +503,12 @@ class OverlayController(private val context: Context) {
     private fun metricSampleLong(key: String): String = when (key) {
         Prefs.METRIC_FPS -> "999"
         Prefs.METRIC_GPU_FREQ -> "9999 MHz"
+        Prefs.METRIC_GPU_LOAD, Prefs.METRIC_CPU_LOAD, Prefs.METRIC_BATT_PCT, Prefs.METRIC_RAM_PCT -> "100%"
         Prefs.METRIC_GPU_TEMP -> "99°"
         Prefs.METRIC_CPU_FREQ -> "9.99 GHz"
         Prefs.METRIC_CPU_TEMP -> "99°"
         Prefs.METRIC_BATT_POWER -> "9999 mA"
         Prefs.METRIC_BATT_TEMP -> "99°"
-        Prefs.METRIC_BATT_PCT -> "100%"
         Prefs.METRIC_RAM -> "99.9 GB"
         else -> "999"
     }

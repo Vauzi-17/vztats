@@ -342,7 +342,7 @@ private fun PowerButton(on: Boolean, onToggle: () -> Unit) {
         )
         Spacer(Modifier.width(6.dp))
         Text(
-            text = if (on) "TURBO ON" else "TURBO OFF",
+            text = if (on) "LOCK ON" else "LOCK OFF",
             color = fg,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,

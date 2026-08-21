@@ -142,14 +142,17 @@ class Prefs private constructor(private val sp: SharedPreferences) {
 
         // Floating-panel metric keys.
         const val METRIC_GPU_FREQ = "gpu_freq"
+        const val METRIC_GPU_LOAD = "gpu_load"
         const val METRIC_GPU_TEMP = "gpu_temp"
         const val METRIC_CPU_FREQ = "cpu_freq"
+        const val METRIC_CPU_LOAD = "cpu_load"
         const val METRIC_CPU_TEMP = "cpu_temp"
         const val METRIC_FPS = "fps"
         const val METRIC_BATT_POWER = "batt_power"
         const val METRIC_BATT_TEMP = "batt_temp"
         const val METRIC_BATT_PCT = "batt_pct"
         const val METRIC_RAM = "ram"
+        const val METRIC_RAM_PCT = "ram_pct"
 
         val DEFAULT_METRICS: Set<String> =
             setOf(METRIC_GPU_FREQ, METRIC_GPU_TEMP, METRIC_CPU_FREQ)
