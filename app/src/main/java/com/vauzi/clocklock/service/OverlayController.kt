@@ -242,20 +242,23 @@ class OverlayController(private val context: Context) {
 
     private fun buildHorizontal(): LinearLayout {
         val d = View(context).apply {
-            layoutParams = LinearLayout.LayoutParams(dp(10f), dp(10f)).apply {
-                rightMargin = dp(12f)
+            layoutParams = LinearLayout.LayoutParams(dp(8f), dp(8f)).apply {
+                rightMargin = dp(9f)
             }
             background = circle(OFF_DOT)
         }
         dot = d
 
-        // Single row of stats.
+        // Single row of icon-badge + value pairs, separated by hairline dividers.
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             addView(d)
         }
-        orderedMetrics().forEach { key -> row.addView(horizontalCell(key)) }
+        orderedMetrics().forEachIndexed { i, key ->
+            if (i > 0) row.addView(divider())
+            row.addView(horizontalCell(key))
+        }
 
         // Measure the natural width; if it overflows, shrink everything uniformly
         // so all metrics stay on ONE line instead of wrapping.
@@ -272,11 +275,39 @@ class OverlayController(private val context: Context) {
         return LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             background = roundedFill(SURFACE, dp(16f), STROKE)
-            setPadding(dp(13f), dp(8f), dp(13f), dp(8f))
+            setPadding(dp(12f), dp(8f), dp(12f), dp(8f))
             addView(row)
             if (showButton) addView(controlRow(topMargin = dp(6f)))
             setOnClickListener { if (!showButton) { showButton = true; rebuild() } }
         }
+    }
+
+    /** Thin vertical separator between horizontal-bar cells, Red Magic-style. */
+    private fun divider(): View = View(context).apply {
+        layoutParams = LinearLayout.LayoutParams(dp(1f), dp(14f)).apply {
+            leftMargin = dp(7f); rightMargin = dp(7f)
+        }
+        setBackgroundColor(STROKE)
+    }
+
+    /** Small round letter badge standing in for a metric's icon (e.g. "G" for GPU). */
+    private fun badgeLetter(key: String): String = when (key) {
+        Prefs.METRIC_FPS -> "F"
+        Prefs.METRIC_GPU_FREQ, Prefs.METRIC_GPU_LOAD, Prefs.METRIC_GPU_TEMP -> "G"
+        Prefs.METRIC_CPU_FREQ, Prefs.METRIC_CPU_LOAD, Prefs.METRIC_CPU_TEMP -> "C"
+        Prefs.METRIC_BATT_POWER, Prefs.METRIC_BATT_TEMP, Prefs.METRIC_BATT_PCT -> "B"
+        Prefs.METRIC_RAM, Prefs.METRIC_RAM_PCT -> "R"
+        else -> "?"
+    }
+
+    private fun badgeView(letter: String): TextView = TextView(context).apply {
+        text = letter
+        gravity = Gravity.CENTER
+        textSize = 9f * scale
+        setTypeface(Typeface.DEFAULT_BOLD)
+        setTextColor(ACCENT)
+        background = circle(BADGE_BG)
+        layoutParams = LinearLayout.LayoutParams(dp(17f), dp(17f))
     }
 
     /** Uniformly scales text sizes, paddings and margins of a view subtree. */
@@ -345,37 +376,23 @@ class OverlayController(private val context: Context) {
     private fun horizontalCell(key: String): LinearLayout {
         val value = TextView(context).apply {
             setTextColor(TEXT)
-            textSize = 14f * scale
+            textSize = 13f * scale
             typeface = Typeface.MONOSPACE
             setTypeface(typeface, Typeface.BOLD)
-            gravity = Gravity.CENTER_HORIZONTAL
-        }
-        val label = TextView(context).apply {
-            text = metricLabel(key).uppercase()
-            setTextColor(MUTED)
-            textSize = 8.5f * scale
-            letterSpacing = 0.06f
-            gravity = Gravity.CENTER_HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(5f), 0, 0, 0)
         }
         // Reserve the worst-case width up front (before real values are set by
         // applyValues()) so both the layout never jitters as digits change AND
         // the single-line overflow measurement below is accurate rather than
         // based on still-empty TextViews.
-        val cellWidth = maxOf(
-            value.paint.measureText(metricSampleShort(key)),
-            label.paint.measureText(label.text.toString())
-        ).toInt() + dp(1f)
-        value.minWidth = cellWidth
-        label.minWidth = cellWidth
+        value.minWidth = value.paint.measureText(metricSampleShort(key)).toInt() + dp(1f)
         valueViews[key] = value
         return LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { rightMargin = dp(14f) }
-            addView(value); addView(label)
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(badgeView(badgeLetter(key)))
+            addView(value)
         }
     }
 
@@ -558,6 +575,7 @@ class OverlayController(private val context: Context) {
         private val TEXT = Color.parseColor("#ECECEC")
         private val MUTED = Color.parseColor("#9AA0A6")
         private val ACCENT = Color.parseColor("#F2C14E")
+        private val BADGE_BG = Color.parseColor("#33F2C14E")
         private val OFF_DOT = Color.parseColor("#6B7075")
         private val BTN_OFF_BG = Color.parseColor("#1FFFFFFF")
         private val BTN_ON_TEXT = Color.parseColor("#3A2D00")
