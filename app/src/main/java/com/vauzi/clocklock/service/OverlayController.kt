@@ -1,12 +1,13 @@
 package com.vauzi.clocklock.service
 
 import android.content.Context
-import android.graphics.Color
+import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.provider.Settings
+import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -14,11 +15,26 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.ui.graphics.toArgb
 import com.vauzi.clocklock.core.CpuSample
 import com.vauzi.clocklock.core.GpuSample
 import com.vauzi.clocklock.core.PowerSample
 import com.vauzi.clocklock.core.Prefs
 import com.vauzi.clocklock.core.TurboManager
+import com.vauzi.clocklock.ui.theme.DarkOnPrimary
+import com.vauzi.clocklock.ui.theme.DarkOnSurface
+import com.vauzi.clocklock.ui.theme.DarkOnSurfaceVariant
+import com.vauzi.clocklock.ui.theme.DarkOutlineVariant
+import com.vauzi.clocklock.ui.theme.DarkPrimary
+import com.vauzi.clocklock.ui.theme.DarkSurfaceVariant
+import com.vauzi.clocklock.ui.theme.LightOnPrimary
+import com.vauzi.clocklock.ui.theme.LightOnSurface
+import com.vauzi.clocklock.ui.theme.LightOnSurfaceVariant
+import com.vauzi.clocklock.ui.theme.LightOutlineVariant
+import com.vauzi.clocklock.ui.theme.LightPrimary
+import com.vauzi.clocklock.ui.theme.LightSurfaceVariant
 import kotlin.math.roundToInt
 import java.util.Locale
 
@@ -58,6 +74,74 @@ class OverlayController(private val context: Context) {
 
     private var dragStartX = 0
     private var dragStartY = 0
+
+    // --- theme-derived palette (re-read from Prefs each rebuild) --------------
+
+    private var SURFACE = 0
+    private var STROKE = 0
+    private var TEXT = 0
+    private var MUTED = 0
+    private var ACCENT = 0
+    private var ON_ACCENT = 0
+    private var OFF_DOT = 0
+    private var BTN_OFF_BG = 0
+
+    /**
+     * Mirrors AdrenoTurboTheme's colour selection (Theme.kt) so the overlay
+     * follows the same theme/dark-mode/Material You settings as the rest of
+     * the app, instead of a hardcoded palette.
+     */
+    private fun refreshPalette() {
+        val dark = when (prefs.themeMode) {
+            Prefs.THEME_LIGHT -> false
+            Prefs.THEME_DARK -> true
+            else -> (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                Configuration.UI_MODE_NIGHT_YES
+        }
+        val useDynamic = prefs.dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+        val primary: Int
+        val onPrimary: Int
+        val onSurface: Int
+        val onSurfaceVariant: Int
+        val outlineVariant: Int
+        val panelBg: Int
+
+        if (useDynamic) {
+            val scheme = if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            primary = scheme.primary.toArgb()
+            onPrimary = scheme.onPrimary.toArgb()
+            onSurface = scheme.onSurface.toArgb()
+            onSurfaceVariant = scheme.onSurfaceVariant.toArgb()
+            outlineVariant = scheme.outlineVariant.toArgb()
+            panelBg = scheme.surfaceVariant.toArgb()
+        } else if (dark) {
+            primary = DarkPrimary.toArgb()
+            onPrimary = DarkOnPrimary.toArgb()
+            onSurface = DarkOnSurface.toArgb()
+            onSurfaceVariant = DarkOnSurfaceVariant.toArgb()
+            outlineVariant = DarkOutlineVariant.toArgb()
+            panelBg = DarkSurfaceVariant.toArgb()
+        } else {
+            primary = LightPrimary.toArgb()
+            onPrimary = LightOnPrimary.toArgb()
+            onSurface = LightOnSurface.toArgb()
+            onSurfaceVariant = LightOnSurfaceVariant.toArgb()
+            outlineVariant = LightOutlineVariant.toArgb()
+            panelBg = LightSurfaceVariant.toArgb()
+        }
+
+        ACCENT = primary
+        ON_ACCENT = onPrimary
+        TEXT = onSurface
+        MUTED = onSurfaceVariant
+        STROKE = withAlpha(outlineVariant, 0x26)
+        SURFACE = withAlpha(panelBg, 0xF0)
+        OFF_DOT = withAlpha(onSurfaceVariant, 0x80)
+        BTN_OFF_BG = withAlpha(onSurface, 0x1F)
+    }
+
+    private fun withAlpha(argb: Int, alpha: Int): Int = (argb and 0x00FFFFFF) or (alpha shl 24)
 
     val isShowing: Boolean get() = root != null
 
@@ -109,6 +193,7 @@ class OverlayController(private val context: Context) {
         val container = root ?: return
         mode = prefs.floatingMode
         scale = prefs.floatingSize.coerceIn(60, 200) / 100f
+        refreshPalette()
 
         clearRefs()
         container.removeAllViews()
@@ -154,7 +239,7 @@ class OverlayController(private val context: Context) {
         toggleBtn?.let {
             it.text = if (on) "LOCK ON" else "LOCK OFF"
             it.background = roundedFill(if (on) ACCENT else BTN_OFF_BG, dp(11f))
-            it.setTextColor(if (on) BTN_ON_TEXT else TEXT)
+            it.setTextColor(if (on) ON_ACCENT else TEXT)
         }
         pillValue?.text = collapsedText()
     }
@@ -175,6 +260,7 @@ class OverlayController(private val context: Context) {
             typeface = Typeface.MONOSPACE
             setPadding(dp(8f), 0, 0, 0)
             gravity = Gravity.CENTER_HORIZONTAL
+            isSingleLine = true
         }
         compactMetricKey()?.let { key ->
             value.minWidth = value.paint.measureText(metricSampleLong(key)).toInt() + dp(2f)
@@ -227,6 +313,7 @@ class OverlayController(private val context: Context) {
             textSize = 13f * scale
             typeface = Typeface.MONOSPACE
             gravity = Gravity.END
+            isSingleLine = true
         }
         value.minWidth = value.paint.measureText(metricSampleLong(key)).toInt() + dp(1f)
         valueViews[key] = value
@@ -290,24 +377,21 @@ class OverlayController(private val context: Context) {
         setBackgroundColor(STROKE)
     }
 
-    /** Small round letter badge standing in for a metric's icon (e.g. "G" for GPU). */
-    private fun badgeLetter(key: String): String = when (key) {
-        Prefs.METRIC_FPS -> "F"
-        Prefs.METRIC_GPU_FREQ, Prefs.METRIC_GPU_LOAD, Prefs.METRIC_GPU_TEMP -> "G"
-        Prefs.METRIC_CPU_FREQ, Prefs.METRIC_CPU_LOAD, Prefs.METRIC_CPU_TEMP -> "C"
-        Prefs.METRIC_BATT_POWER, Prefs.METRIC_BATT_TEMP, Prefs.METRIC_BATT_PCT -> "B"
-        Prefs.METRIC_RAM, Prefs.METRIC_RAM_PCT -> "R"
-        else -> "?"
-    }
-
-    private fun badgeView(letter: String): TextView = TextView(context).apply {
-        text = letter
-        gravity = Gravity.CENTER
-        textSize = 9f * scale
-        setTypeface(Typeface.DEFAULT_BOLD)
-        setTextColor(ACCENT)
-        background = circle(BADGE_BG)
-        layoutParams = LinearLayout.LayoutParams(dp(17f), dp(17f))
+    /** Short but readable label for the horizontal bar — e.g. "GPU", "GPU%", "GPU°". */
+    private fun metricShortLabel(key: String): String = when (key) {
+        Prefs.METRIC_FPS -> "FPS"
+        Prefs.METRIC_GPU_FREQ -> "GPU"
+        Prefs.METRIC_GPU_LOAD -> "GPU%"
+        Prefs.METRIC_GPU_TEMP -> "GPU°"
+        Prefs.METRIC_CPU_FREQ -> "CPU"
+        Prefs.METRIC_CPU_LOAD -> "CPU%"
+        Prefs.METRIC_CPU_TEMP -> "CPU°"
+        Prefs.METRIC_BATT_POWER -> "mA"
+        Prefs.METRIC_BATT_TEMP -> "BAT°"
+        Prefs.METRIC_BATT_PCT -> "BAT%"
+        Prefs.METRIC_RAM -> "RAM"
+        Prefs.METRIC_RAM_PCT -> "RAM%"
+        else -> key
     }
 
     /** Uniformly scales text sizes, paddings and margins of a view subtree. */
@@ -374,25 +458,35 @@ class OverlayController(private val context: Context) {
     }
 
     private fun horizontalCell(key: String): LinearLayout {
+        val label = TextView(context).apply {
+            text = metricShortLabel(key)
+            setTextColor(MUTED)
+            textSize = 9f * scale
+            setTypeface(Typeface.DEFAULT_BOLD)
+            gravity = Gravity.CENTER_VERTICAL
+            isSingleLine = true
+        }
         val value = TextView(context).apply {
             setTextColor(TEXT)
             textSize = 13f * scale
             typeface = Typeface.MONOSPACE
             setTypeface(typeface, Typeface.BOLD)
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(5f), 0, 0, 0)
+            setPadding(dp(4f), 0, 0, 0)
+            isSingleLine = true
+            ellipsize = TextUtils.TruncateAt.END
         }
         // Reserve the worst-case width up front (before real values are set by
         // applyValues()) so both the layout never jitters as digits change AND
         // the single-line overflow measurement below is accurate rather than
-        // based on still-empty TextViews.
+        // based on still-empty TextViews. isSingleLine on both guarantees a cell
+        // never wraps to a second line even if this estimate is ever exceeded.
         value.minWidth = value.paint.measureText(metricSampleShort(key)).toInt() + dp(1f)
         valueViews[key] = value
         return LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            addView(badgeView(badgeLetter(key)))
-            addView(value)
+            addView(label); addView(value)
         }
     }
 
@@ -570,16 +664,6 @@ class OverlayController(private val context: Context) {
         }
 
     companion object {
-        private val SURFACE = Color.parseColor("#F01B1C1F")
-        private val STROKE = Color.parseColor("#26FFFFFF")
-        private val TEXT = Color.parseColor("#ECECEC")
-        private val MUTED = Color.parseColor("#9AA0A6")
-        private val ACCENT = Color.parseColor("#F2C14E")
-        private val BADGE_BG = Color.parseColor("#33F2C14E")
-        private val OFF_DOT = Color.parseColor("#6B7075")
-        private val BTN_OFF_BG = Color.parseColor("#1FFFFFFF")
-        private val BTN_ON_TEXT = Color.parseColor("#3A2D00")
-
         fun canDraw(context: Context): Boolean = Settings.canDrawOverlays(context)
     }
 }
