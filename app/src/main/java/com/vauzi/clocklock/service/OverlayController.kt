@@ -348,8 +348,15 @@ class OverlayController(private val context: Context) {
         }
 
         // Measure the natural width; if it overflows, shrink everything uniformly
-        // so all metrics stay on ONE line instead of wrapping.
-        val maxW = context.resources.displayMetrics.widthPixels - dp(50f)
+        // so all metrics stay on ONE line instead of wrapping. Budget against
+        // where the panel actually sits on screen (it may have been dragged),
+        // not just a flat guess — the outer capsule's own padding (dp(12f) each
+        // side, matching the padding set below) and a bit of edge breathing room
+        // both come out of the same screen width the row has to fit in.
+        val outerPadding = dp(12f) * 2
+        val edgeSafety = dp(14f)
+        val maxW = context.resources.displayMetrics.widthPixels -
+            (if (::params.isInitialized) params.x else dpRaw(16)) - outerPadding - edgeSafety
         row.measure(
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
