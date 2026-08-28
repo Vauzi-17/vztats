@@ -68,9 +68,9 @@ android {
                 storePassword = signingProp("storePassword")
                 keyAlias = signingProp("keyAlias")
                 keyPassword = signingProp("keyPassword")
-                // v1 is required because minSdk is 25 (v2/v3 alone need API 24+
-                // to verify, and older devices fall back to the JAR signature).
-                enableV1Signing = true
+                // minSdk is 25 and the v2 scheme landed in API 24, so every
+                // supported device can verify v2 and the legacy v1 JAR
+                // signature is not needed.
                 enableV2Signing = true
             }
         }

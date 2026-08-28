@@ -104,8 +104,9 @@ some kernels ignore the request — the app tells you when that happens.
 Download the APK from the [Releases](https://github.com/Vauzi-17/adreno-clock-lock/releases)
 page and sideload it.
 
-VZtats is **not distributed on the Play Store** and cannot be — see the
-[Building](#building) note about `targetSdk` below.
+VZtats is **not distributed on the Play Store** and cannot be: it deliberately
+targets an old API level so Android keeps letting it read the GPU frequency, which
+the Play Store does not allow.
 
 Optional, for real FPS readings: install [Shizuku](https://shizuku.rikka.app/),
 start it, then pair it from **Settings → Shizuku** inside VZtats.
@@ -130,61 +131,9 @@ Being upfront about what isn't done yet in v0.1:
   toggle while a game is actually running.
 - Locking the GPU at max clock **increases heat and battery drain**. ⚠️
 
-## Building
+## Building from source
 
-Requires the Android SDK, NDK (arm64), and JDK 17–21.
-`compileSdk 36`, `minSdk 25`, **`targetSdk 25`**.
-
-```bash
-./gradlew assembleDebug
-```
-
-### Building a signed release
-
-Release signing is read from `local.properties` (which is gitignored), so the
-keystore and its passwords never enter the repository.
-
-1. Create a keystore — pick your own passwords when prompted:
-
-   ```bash
-   keytool -genkeypair -v -keystore vztats-release.jks \
-     -alias vztats -keyalg RSA -keysize 4096 -validity 10000
-   ```
-
-2. Add the paths and passwords to `local.properties`:
-
-   ```properties
-   vztats.storeFile=C:/path/to/vztats-release.jks
-   vztats.storePassword=yourStorePassword
-   vztats.keyAlias=vztats
-   vztats.keyPassword=yourKeyPassword
-   ```
-
-   CI can use the `VZTATS_STOREFILE`, `VZTATS_STOREPASSWORD`, `VZTATS_KEYALIAS`
-   and `VZTATS_KEYPASSWORD` environment variables instead.
-
-3. Build:
-
-   ```bash
-   ./gradlew assembleRelease
-   ```
-
-   The signed APK lands in `app/build/outputs/apk/release/app-release.apk`.
-   Without a configured keystore the same command still succeeds but produces
-   `app-release-unsigned.apk`, which cannot be installed.
-
-> [!CAUTION]
-> Keep the keystore file and its passwords private, and back the keystore up.
-> Every future update has to be signed with the *same* key — Android refuses to
-> install an update signed by a different one, and there is no way to recover a
-> lost keystore.
-
-> [!IMPORTANT]
-> `targetSdk` is deliberately pinned at 25. A higher `targetSdk` moves the app into
-> a stricter SELinux domain that is denied read access to `/sys/class/kgsl`, which
-> breaks the GPU frequency readout. (The lock ioctl itself keeps working, because
-> `/dev/kgsl-3d0` is a device node rather than sysfs.) This is why the app is not
-> Play Store compliant and is meant for sideloading.
+Developers: see [docs/BUILDING.md](docs/BUILDING.md).
 
 ## Credits
 
