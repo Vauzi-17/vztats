@@ -1,7 +1,7 @@
 # Building VZtats
 
 For developers. If you just want to use the app, grab the APK from
-[Releases](https://github.com/Vauzi-17/adreno-clock-lock/releases) instead.
+[Releases](https://github.com/Vauzi-17/vztats/releases) instead.
 
 ## Requirements
 

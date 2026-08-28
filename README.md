@@ -6,8 +6,8 @@
 
 **A no-root performance monitor for Android — with an Adreno GPU clock lock built in.**
 
-[![Pre-release](https://img.shields.io/badge/status-pre--release-orange)](https://github.com/Vauzi-17/adreno-clock-lock/releases)
-[![Version](https://img.shields.io/badge/version-0.1-blue)](https://github.com/Vauzi-17/adreno-clock-lock/releases)
+[![Pre-release](https://img.shields.io/badge/status-pre--release-orange)](https://github.com/Vauzi-17/vztats/releases)
+[![Version](https://img.shields.io/badge/version-0.1-blue)](https://github.com/Vauzi-17/vztats/releases)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 </div>
@@ -19,7 +19,7 @@
 > VZtats is not feature-complete and **bugs are expected**. Some monitors are still
 > missing, some readings are approximations, and the UI is still changing between
 > releases. Use it as a preview, not as a daily-driver tool you rely on.
-> Please [open an issue](https://github.com/Vauzi-17/adreno-clock-lock/issues) if
+> Please [open an issue](https://github.com/Vauzi-17/vztats/issues) if
 > something breaks on your device — device-specific reports are especially useful.
 
 ## What it is
@@ -101,7 +101,7 @@ some kernels ignore the request — the app tells you when that happens.
 
 ## Install
 
-Download the APK from the [Releases](https://github.com/Vauzi-17/adreno-clock-lock/releases)
+Download the APK from the [Releases](https://github.com/Vauzi-17/vztats/releases)
 page and sideload it.
 
 VZtats is **not distributed on the Play Store** and cannot be: it deliberately
