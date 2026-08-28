@@ -10,7 +10,7 @@ import com.vauzi.clocklock.core.GpuMonitor
 import com.vauzi.clocklock.core.NativeBridge
 import com.vauzi.clocklock.core.TurboManager
 
-/** Quick Settings tile to toggle turbo without opening the app. */
+/** Quick Settings tile to toggle the GPU lock without opening the app. */
 class TurboTileService : TileService() {
 
     override fun onStartListening() {
@@ -35,7 +35,7 @@ class TurboTileService : TileService() {
             on -> Tile.STATE_ACTIVE
             else -> Tile.STATE_INACTIVE
         }
-        tile.label = "GPU Turbo"
+        tile.label = "GPU Lock"
         tile.icon = Icon.createWithResource(this, R.drawable.ic_turbo)
         if (Build_VERSION_TIRAMISU_OR_ABOVE) {
             tile.subtitle = when {

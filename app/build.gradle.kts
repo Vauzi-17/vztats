@@ -17,8 +17,10 @@ android {
         // <= targetSdk, and a lower minSdk also supports more old devices.
         minSdk = 25
         targetSdk = 25
-        versionCode = 18
-        versionName = "2.5"
+        // VZtats restarts the version line at 0.1 (pre-release). versionCode
+        // keeps climbing from the pre-rename builds so updates still install.
+        versionCode = 19
+        versionName = "0.1"
 
         ndk {
             abiFilters += "arm64-v8a"

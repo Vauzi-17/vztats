@@ -195,7 +195,7 @@ fun HomeScreen(
             )
             if (gpu?.isAtMax == true) {
                 Text(
-                    "Clock at reported maximum — turbo working.",
+                    "Clock at reported maximum — GPU lock working.",
                     style = MaterialTheme.typography.bodySmall,
                     color = TurboGreen,
                     modifier = Modifier.padding(top = Dimens.SpaceS)
@@ -235,7 +235,7 @@ fun HomeScreen(
             BannerCard(
                 icon = Icons.Filled.WarningAmber,
                 title = "Some interfaces missing",
-                subtitle = "Turbo may not work reliably on this device.",
+                subtitle = "GPU lock may not work reliably on this device.",
                 tone = TurboRed
             )
         }
@@ -366,7 +366,7 @@ private fun fpsAccent(fps: Int?): Color? = when {
 }
 
 private fun statusFor(state: TurboState, atMax: Boolean): Pair<String, Color> {
-    if (!state.desiredOn) return "Turbo off" to TurboRed.copy(alpha = 0.5f)
+    if (!state.desiredOn) return "Lock off" to TurboRed.copy(alpha = 0.5f)
     return when (state.outcome) {
         ApplyOutcome.UNSUPPORTED -> "Not supported" to TurboRed
         ApplyOutcome.FAILED -> "Kernel rejected" to TurboRed

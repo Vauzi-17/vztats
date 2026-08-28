@@ -2,7 +2,7 @@ package com.vauzi.clocklock.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// --- Premium "turbo" palette: warm amber gold over deep, near-black surfaces.
+// --- VZtats palette: warm amber gold over deep, near-black surfaces.
 // Dark theme uses very dark blue-blacks for depth; light theme uses warm off-whites.
 
 // Dark

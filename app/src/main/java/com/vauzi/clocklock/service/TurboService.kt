@@ -151,9 +151,9 @@ class TurboService : Service() {
     private fun buildNotification(): Notification {
         val on = TurboManager.state.value.desiredOn
         val content = when {
-            autoSafetyTripped -> "Turbo auto-disabled (thermal/battery limit reached)"
-            on -> "Turbo ON — GPU clock locked at max"
-            else -> "Turbo OFF"
+            autoSafetyTripped -> "GPU lock auto-disabled (thermal/battery limit reached)"
+            on -> "GPU lock ON — clock pinned at max"
+            else -> "Monitoring — GPU lock off"
         }
         val open = PendingIntent.getActivity(
             this, 0,
@@ -162,7 +162,7 @@ class TurboService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_turbo)
-            .setContentTitle("Adreno Clock Lock")
+            .setContentTitle(getString(R.string.app_name))
             .setContentText(content)
             .setOngoing(true)
             .setContentIntent(open)
@@ -176,9 +176,9 @@ class TurboService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
         val channel = NotificationChannel(
             CHANNEL_ID,
-            getString(R.string.turbo_channel_name),
+            getString(R.string.lock_channel_name),
             NotificationManager.IMPORTANCE_LOW
-        ).apply { description = getString(R.string.turbo_channel_desc) }
+        ).apply { description = getString(R.string.lock_channel_desc) }
         nm.createNotificationChannel(channel)
     }
 

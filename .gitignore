@@ -16,3 +16,12 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Local AI/editor tooling config — not part of the project
+/.claude/
+/.codegraph/
+/.gemini/
+/.mcp.json
+/AGENTS.md
+/GEMINI.md
+/opencode.jsonc

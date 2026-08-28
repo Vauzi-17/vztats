@@ -1,6 +1,7 @@
 MIT License
 
-Copyright (c) 2025 Fartopblu
+Copyright (c) 2025 Fartopblu (original work: AdrenoGPU-Turbo-Mode)
+Copyright (c) 2025 Vauzi-17 (VZtats, derivative work)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +20,23 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+THIRD-PARTY COMPONENTS
+
+This project bundles or depends on the following third-party software, each
+under its own license:
+
+1. libadrenotools — BSD 2-Clause License, Copyright (c) 2021 Billy Laws
+   Bundled in: app/src/main/cpp/adrenotools/
+   Full text: app/src/main/cpp/adrenotools/LICENSE
+   Upstream: https://github.com/bylaws/libadrenotools
+
+2. Shizuku API — Apache License 2.0, Copyright (c) RikkaApps
+   Dependency: dev.rikka.shizuku:api, dev.rikka.shizuku:provider
+   Upstream: https://github.com/RikkaApps/Shizuku
+
+3. AndroidX / Jetpack Compose / Material 3 — Apache License 2.0,
+   Copyright (c) The Android Open Source Project
+   Upstream: https://developer.android.com/jetpack

@@ -45,7 +45,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Keeps the user-requested GPU turbo lock active and re-applies it after the screen unlocks; also runs optional thermal/battery auto-safety." />
+                android:value="Keeps live performance monitoring running and the user-requested GPU clock lock active, re-applying it after the screen unlocks; also runs optional thermal/battery auto-safety." />
         </service>
 
         <provider
