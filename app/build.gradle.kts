@@ -1,8 +1,35 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+// Release signing is configured through local.properties (gitignored) or the
+// matching environment variables, so the keystore and its passwords never live
+// in the repository. See README > Building a signed release.
+//
+// local.properties:
+//   vztats.storeFile=C:/path/to/vztats-release.jks
+//   vztats.storePassword=...
+//   vztats.keyAlias=vztats
+//   vztats.keyPassword=...
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
+fun signingProp(name: String): String? =
+    (localProps.getProperty("vztats.$name") ?: System.getenv("VZTATS_" + name.uppercase()))
+        ?.takeIf { it.isNotBlank() }
+
+val releaseStoreFile = signingProp("storeFile")
+val hasReleaseSigning = releaseStoreFile != null &&
+    rootProject.file(releaseStoreFile).exists() &&
+    signingProp("storePassword") != null &&
+    signingProp("keyAlias") != null &&
+    signingProp("keyPassword") != null
 
 android {
     namespace = "com.vauzi.vztats"
@@ -34,6 +61,21 @@ android {
         }
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = rootProject.file(releaseStoreFile!!)
+                storePassword = signingProp("storePassword")
+                keyAlias = signingProp("keyAlias")
+                keyPassword = signingProp("keyPassword")
+                // v1 is required because minSdk is 25 (v2/v3 alone need API 24+
+                // to verify, and older devices fall back to the JAR signature).
+                enableV1Signing = true
+                enableV2Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -42,10 +84,22 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Falls back to an unsigned build when no keystore is configured, so
+            // the project still builds for anyone cloning it. Signed release
+            // APKs are only produced on a machine that has the key.
+            signingConfig = signingConfigs.findByName("release")
         }
         debug {
             isDebuggable = true
         }
+    }
+
+    lint {
+        // Play Store's "target a recent API level" rule. VZtats is sideload-only
+        // and deliberately pinned to targetSdk 25 so it keeps SELinux read
+        // access to /sys/class/kgsl (see defaultConfig above), so this rule is
+        // not applicable and must not fail the release build.
+        disable += "ExpiredTargetSdkVersion"
     }
 
     compileOptions {

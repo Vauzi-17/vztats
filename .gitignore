@@ -17,6 +17,12 @@
 .cxx
 local.properties
 
+# Signing keys — must never be committed
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+
 # Local AI/editor tooling config — not part of the project
 /.claude/
 /.codegraph/

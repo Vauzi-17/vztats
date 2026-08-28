@@ -139,6 +139,46 @@ Requires the Android SDK, NDK (arm64), and JDK 17–21.
 ./gradlew assembleDebug
 ```
 
+### Building a signed release
+
+Release signing is read from `local.properties` (which is gitignored), so the
+keystore and its passwords never enter the repository.
+
+1. Create a keystore — pick your own passwords when prompted:
+
+   ```bash
+   keytool -genkeypair -v -keystore vztats-release.jks \
+     -alias vztats -keyalg RSA -keysize 4096 -validity 10000
+   ```
+
+2. Add the paths and passwords to `local.properties`:
+
+   ```properties
+   vztats.storeFile=C:/path/to/vztats-release.jks
+   vztats.storePassword=yourStorePassword
+   vztats.keyAlias=vztats
+   vztats.keyPassword=yourKeyPassword
+   ```
+
+   CI can use the `VZTATS_STOREFILE`, `VZTATS_STOREPASSWORD`, `VZTATS_KEYALIAS`
+   and `VZTATS_KEYPASSWORD` environment variables instead.
+
+3. Build:
+
+   ```bash
+   ./gradlew assembleRelease
+   ```
+
+   The signed APK lands in `app/build/outputs/apk/release/app-release.apk`.
+   Without a configured keystore the same command still succeeds but produces
+   `app-release-unsigned.apk`, which cannot be installed.
+
+> [!CAUTION]
+> Keep the keystore file and its passwords private, and back the keystore up.
+> Every future update has to be signed with the *same* key — Android refuses to
+> install an update signed by a different one, and there is no way to recover a
+> lost keystore.
+
 > [!IMPORTANT]
 > `targetSdk` is deliberately pinned at 25. A higher `targetSdk` moves the app into
 > a stricter SELinux domain that is denied read access to `/sys/class/kgsl`, which
