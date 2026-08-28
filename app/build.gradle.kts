@@ -17,10 +17,7 @@ android {
         // <= targetSdk, and a lower minSdk also supports more old devices.
         minSdk = 25
         targetSdk = 25
-        // VZtats restarts the version line at 0.1 (pre-release). The
-        // applicationId changed with the rename, so Android treats this as a
-        // new app: builds from before the rename must be uninstalled first,
-        // they cannot be updated in place.
+        // First public pre-release.
         versionCode = 1
         versionName = "0.1"
 
