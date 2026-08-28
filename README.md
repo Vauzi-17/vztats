@@ -32,6 +32,17 @@ It started as a fork of [AdrenoGPU-Turbo-Mode](https://github.com/Fartopblu/Adre
 (a single-purpose Adreno clock locker) and grew into a general monitor. The GPU
 lock is still here — it's now one feature among several rather than the whole app.
 
+## Screenshots
+
+<div align="center">
+
+| Home | Floating monitor |
+|:---:|:---:|
+| <img src="screenshots/home.jpg" alt="Home screen showing GPU, CPU and memory cards" width="300"> | <img src="screenshots/floating-monitor.jpg" alt="Floating monitor configuration dialog" width="300"> |
+| GPU, per-core CPU, memory & battery, frequency graph | Pick metrics, layout, opacity and size |
+
+</div>
+
 ## Features
 
 **Live monitoring**

@@ -5,21 +5,23 @@ plugins {
 }
 
 android {
-    namespace = "com.vauzi.clocklock"
+    namespace = "com.vauzi.vztats"
     compileSdk = 36
     buildToolsVersion = "36.1.0"
 
     defaultConfig {
-        applicationId = "com.vauzi.clocklock"
+        applicationId = "com.vauzi.vztats"
         // targetSdk is intentionally kept at 25 (matching the original app): a
         // higher targetSdk moves the app into a stricter SELinux domain that is
         // denied read access to /sys/class/kgsl (GPU frequency). minSdk must be
         // <= targetSdk, and a lower minSdk also supports more old devices.
         minSdk = 25
         targetSdk = 25
-        // VZtats restarts the version line at 0.1 (pre-release). versionCode
-        // keeps climbing from the pre-rename builds so updates still install.
-        versionCode = 19
+        // VZtats restarts the version line at 0.1 (pre-release). The
+        // applicationId changed with the rename, so Android treats this as a
+        // new app: builds from before the rename must be uninstalled first,
+        // they cannot be updated in place.
+        versionCode = 1
         versionName = "0.1"
 
         ndk {
