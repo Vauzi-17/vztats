@@ -17,6 +17,9 @@
 .cxx
 local.properties
 
+# Draft text for the GitHub release form — not part of the project
+/RELEASE_NOTES.md
+
 # Signing keys — must never be committed
 *.jks
 *.keystore
