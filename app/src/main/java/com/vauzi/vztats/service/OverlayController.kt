@@ -1,5 +1,6 @@
 package com.vauzi.vztats.service
 
+import android.content.ComponentCallbacks
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.PixelFormat
@@ -11,7 +12,6 @@ import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -53,6 +53,18 @@ class OverlayController(private val context: Context) {
     private lateinit var params: WindowManager.LayoutParams
 
     private var mode = Prefs.MODE_HORIZONTAL
+
+    /** Size the user picked in settings. */
+    private var userScale = 1f
+
+    /**
+     * Extra shrink applied only when the horizontal bar would not fit the screen
+     * on one line. Recomputed from scratch on every rebuild, so it can never
+     * compound or go stale after a rotation.
+     */
+    private var fitScale = 1f
+
+    /** Effective scale every dimension and text size is derived from. */
     private var scale = 1f
     private var expandedState = false   // compact only
     private var showButton = false      // horizontal / vertical
@@ -145,6 +157,22 @@ class OverlayController(private val context: Context) {
 
     val isShowing: Boolean get() = root != null
 
+    /**
+     * The overlay is a WindowManager view, so it survives rotation instead of
+     * being recreated like an Activity's content. Without this the panel keeps
+     * whatever size it was built at for the previous orientation — appearing
+     * too small in landscape, or too wide and clipped back in portrait.
+     */
+    private val configCallbacks = object : ComponentCallbacks {
+        override fun onConfigurationChanged(newConfig: Configuration) {
+            // Display metrics can lag the configuration callback on some OEM
+            // skins, so rebuild on the next loop rather than inline.
+            root?.postDelayed({ if (root != null) rebuild() }, 120L)
+        }
+
+        override fun onLowMemory() = Unit
+    }
+
     // --- lifecycle ------------------------------------------------------------
 
     fun show() {
@@ -175,14 +203,17 @@ class OverlayController(private val context: Context) {
             onDrag = { dx, dy ->
                 params.x = dragStartX + dx.roundToInt()
                 params.y = dragStartY + dy.roundToInt()
+                clampParamsToScreen()
                 runCatching { wm.updateViewLayout(this, params) }
             }
         }
         rebuild()
         runCatching { wm.addView(root, params) }
+        runCatching { context.registerComponentCallbacks(configCallbacks) }
     }
 
     fun hide() {
+        runCatching { context.unregisterComponentCallbacks(configCallbacks) }
         root?.let { runCatching { wm.removeView(it) } }
         root = null
         clearRefs()
@@ -192,9 +223,37 @@ class OverlayController(private val context: Context) {
     fun rebuild() {
         val container = root ?: return
         mode = prefs.floatingMode
-        scale = prefs.floatingSize.coerceIn(60, 200) / 100f
+        userScale = prefs.floatingSize.coerceIn(60, 200) / 100f
         refreshPalette()
 
+        // Always start from the user's size with no shrink, so the result only
+        // depends on the current prefs and the current screen - never on what
+        // the panel happened to look like before.
+        fitScale = 1f
+        scale = userScale
+        populate(container)
+
+        // The horizontal bar is the only layout that must fit the screen width
+        // on a single line. Measure what it naturally wants, and if that
+        // overflows, rebuild once at the exact scale that fits.
+        if (mode == Prefs.MODE_HORIZONTAL) {
+            val natural = measuredWidthOf(container)
+            val available = realScreenWidthPx() - dpRaw(EDGE_MARGIN_DP) * 2
+            if (natural > 0 && available > 0 && natural > available) {
+                fitScale = (available.toFloat() / natural).coerceIn(MIN_FIT_SCALE, 1f)
+                scale = userScale * fitScale
+                populate(container)
+            }
+        }
+
+        clampParamsToScreen()
+        if (container.isAttachedToWindow) {
+            runCatching { wm.updateViewLayout(container, params) }
+        }
+    }
+
+    /** Builds the current layout into [container] at the current [scale]. */
+    private fun populate(container: DraggableOverlayLayout) {
         clearRefs()
         container.removeAllViews()
         container.addView(
@@ -207,6 +266,32 @@ class OverlayController(private val context: Context) {
         container.alpha = (prefs.floatingOpacity.coerceIn(20, 100)) / 100f
         applyValues()
         refresh()
+    }
+
+    private fun measuredWidthOf(v: View): Int {
+        v.measure(
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        )
+        return v.measuredWidth
+    }
+
+    /**
+     * Keeps the panel fully on screen. Without this a position chosen in one
+     * orientation can leave the panel hanging off the edge in the other.
+     */
+    private fun clampParamsToScreen() {
+        val r = root ?: return
+        if (!::params.isInitialized) return
+        r.measure(
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        )
+        val margin = dpRaw(EDGE_MARGIN_DP)
+        val maxX = (realScreenWidthPx() - r.measuredWidth - margin).coerceAtLeast(margin)
+        val maxY = (realScreenHeightPx() - r.measuredHeight - margin).coerceAtLeast(margin)
+        params.x = params.x.coerceIn(margin, maxX)
+        params.y = params.y.coerceIn(margin, maxY)
     }
 
     private fun clearRefs() {
@@ -343,34 +428,10 @@ class OverlayController(private val context: Context) {
             row.addView(horizontalCell(key))
         }
 
-        // Measure the natural width; if it overflows, shrink everything uniformly
-        // so all metrics stay on ONE line instead of wrapping. Budget against
-        // where the panel actually sits on screen (it may have been dragged),
-        // not just a flat guess — the outer capsule's own padding (matching the
-        // padding set below) and a bit of edge breathing room both come out of
-        // the same screen width the row has to fit in. Uses the WindowManager's
-        // own bounds rather than the (service) context's display metrics, since
-        // those aren't guaranteed to agree on every OEM skin.
-        val outerPadding = dp(10f) * 2
-        val edgeSafety = dp(20f)
-        val screenW = realScreenWidthPx()
-        val maxW = screenW - (if (::params.isInitialized) params.x else dpRaw(16)) - outerPadding - edgeSafety
-        row.measure(
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-        )
-        if (maxW in 1 until row.measuredWidth) {
-            scaleViews(row, maxW.toFloat() / row.measuredWidth)
-            // Text metrics don't scale perfectly linearly (hinting/rounding), so
-            // re-check and nudge once more if the first pass undershot slightly.
-            row.measure(
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-            )
-            if (row.measuredWidth > maxW) {
-                scaleViews(row, maxW.toFloat() / row.measuredWidth)
-            }
-        }
+        // Fitting the row to the screen is handled by rebuild(), which measures
+        // this layout and rebuilds it at a corrected scale if needed. Doing it
+        // there rather than mutating views here keeps the result dependent only
+        // on the current screen, so rotating cannot leave a stale size behind.
 
         // Outer column so the toggle + close controls sit on their own line.
         return LinearLayout(context).apply {
@@ -406,25 +467,6 @@ class OverlayController(private val context: Context) {
         Prefs.METRIC_RAM -> "RAM"
         Prefs.METRIC_RAM_PCT -> "RAM%"
         else -> key
-    }
-
-    /** Uniformly scales text sizes, paddings and margins of a view subtree. */
-    private fun scaleViews(v: View, f: Float) {
-        if (v is TextView) {
-            v.setTextSize(TypedValue.COMPLEX_UNIT_PX, v.textSize * f)
-            if (v.minWidth > 0) v.minWidth = (v.minWidth * f).toInt()
-        }
-        v.setPadding(
-            (v.paddingLeft * f).toInt(), (v.paddingTop * f).toInt(),
-            (v.paddingRight * f).toInt(), (v.paddingBottom * f).toInt()
-        )
-        (v.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
-            lp.leftMargin = (lp.leftMargin * f).toInt()
-            lp.rightMargin = (lp.rightMargin * f).toInt()
-        }
-        if (v is ViewGroup) {
-            for (i in 0 until v.childCount) scaleViews(v.getChildAt(i), f)
-        }
     }
 
     private fun controlRow(showClose: Boolean = true, topMargin: Int = 0): LinearLayout =
@@ -673,6 +715,13 @@ class OverlayController(private val context: Context) {
         android.graphics.Point().also { wm.defaultDisplay.getRealSize(it) }.x
     }
 
+    private fun realScreenHeightPx(): Int = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        wm.currentWindowMetrics.bounds.height()
+    } else {
+        @Suppress("DEPRECATION")
+        android.graphics.Point().also { wm.defaultDisplay.getRealSize(it) }.y
+    }
+
     private fun circle(color: Int) = GradientDrawable().apply {
         shape = GradientDrawable.OVAL
         setColor(color)
@@ -686,6 +735,12 @@ class OverlayController(private val context: Context) {
         }
 
     companion object {
+        /** Breathing room kept between the panel and every screen edge. */
+        private const val EDGE_MARGIN_DP = 6
+
+        /** Floor on the auto-shrink, so the bar stays legible instead of vanishing. */
+        private const val MIN_FIT_SCALE = 0.55f
+
         fun canDraw(context: Context): Boolean = Settings.canDrawOverlays(context)
     }
 }
