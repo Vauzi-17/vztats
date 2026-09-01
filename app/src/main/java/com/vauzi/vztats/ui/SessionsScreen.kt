@@ -1,5 +1,7 @@
 package com.vauzi.vztats.ui
 
+import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -12,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -22,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vauzi.vztats.core.SessionRecorder
 import com.vauzi.vztats.core.SessionStore
@@ -76,6 +80,36 @@ fun SessionsScreen(modifier: Modifier = Modifier) {
         }
 
         val sessions = remember(recording, refreshTick) { SessionStore.list(context) }
+
+        if (sessions.isNotEmpty()) {
+            OutlinedButton(
+                onClick = {
+                    val csv = SessionStore.exportCsv(context)
+                    if (csv == null) {
+                        Toast.makeText(context, "Nothing to export.", Toast.LENGTH_SHORT).show()
+                        return@OutlinedButton
+                    }
+                    val uri = FileProvider.getUriForFile(
+                        context, "${context.packageName}.fileprovider", csv
+                    )
+                    val share = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/csv"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        putExtra(Intent.EXTRA_SUBJECT, "VZtats sessions")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    runCatching {
+                        context.startActivity(Intent.createChooser(share, "Export sessions"))
+                    }.onFailure {
+                        Toast.makeText(context, "No app to share the file.", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Export ${sessions.size} session(s) as CSV")
+            }
+        }
+
         if (sessions.isEmpty() && !recording) {
             Text(
                 "No saved sessions yet.",

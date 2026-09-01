@@ -6,6 +6,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /** Aggregated summary of one recorded gaming session. */
 data class SessionSummary(
@@ -113,6 +116,47 @@ object SessionStore {
 
     fun delete(context: Context, id: String) {
         runCatching { File(dir(context), "$id.json").delete() }
+    }
+
+    /**
+     * Writes every saved session to a CSV in the app's cache and returns it, or
+     * null if there is nothing to export. Lives in cache/exports so it can be
+     * shared through the FileProvider declared in the manifest.
+     */
+    fun exportCsv(context: Context): File? {
+        val sessions = list(context)
+        if (sessions.isEmpty()) return null
+
+        val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.ROOT).format(Date())
+        val out = File(File(context.cacheDir, "exports").apply { mkdirs() }, "vztats-sessions-$stamp.csv")
+        val iso = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
+
+        return runCatching {
+            out.writeText(buildString {
+                appendLine(
+                    "started_at,duration_sec,gpu_max_mhz,gpu_avg_mhz,gpu_max_temp_c," +
+                        "cpu_max_temp_c,battery_max_temp_c,avg_fps,min_fps,throttle_pct"
+                )
+                // Oldest first reads more naturally in a spreadsheet.
+                sessions.sortedBy { it.startedAtMs }.forEach { s ->
+                    appendLine(
+                        listOf(
+                            iso.format(Date(s.startedAtMs)),
+                            s.durationSec.toString(),
+                            s.gpuMaxMhz?.toString().orEmpty(),
+                            s.gpuAvgMhz?.toString().orEmpty(),
+                            s.gpuMaxTempC?.let { "%.1f".format(Locale.ROOT, it) }.orEmpty(),
+                            s.cpuMaxTempC?.let { "%.1f".format(Locale.ROOT, it) }.orEmpty(),
+                            s.batteryMaxTempC?.let { "%.1f".format(Locale.ROOT, it) }.orEmpty(),
+                            s.avgFps?.toString().orEmpty(),
+                            s.minFps?.toString().orEmpty(),
+                            s.throttlePct?.toString().orEmpty()
+                        ).joinToString(",")
+                    )
+                }
+            })
+            out
+        }.getOrNull()
     }
 
     private fun toJson(s: SessionSummary): String = JSONObject().apply {

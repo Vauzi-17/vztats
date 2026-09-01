@@ -26,6 +26,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,6 +43,7 @@ import com.vauzi.vztats.core.CpuMonitor
 import com.vauzi.vztats.core.GpuMonitor
 import com.vauzi.vztats.core.NativeBridge
 import com.vauzi.vztats.core.SystemSample
+import com.vauzi.vztats.core.ThermalMonitor
 import com.vauzi.vztats.core.TurboManager
 import com.vauzi.vztats.core.TurboState
 import com.vauzi.vztats.ui.theme.Dimens
@@ -226,6 +230,42 @@ fun HomeScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = Dimens.SpaceXS)
             )
+        }
+
+        // --- Temperature sensors --------------------------------------------------
+        if (ThermalMonitor.isSupported) {
+            var sensorsExpanded by remember { mutableStateOf(false) }
+            // Re-read on each sample tick so the list stays live while open.
+            val zones = remember(sample?.timestampMs, sensorsExpanded) {
+                if (sensorsExpanded) ThermalMonitor.readAll() else emptyList()
+            }
+
+            SectionHeader("Temperature sensors")
+            NavRow(
+                title = "All thermal zones",
+                subtitle = "Every sensor the kernel exposes, hottest first",
+                actionLabel = if (sensorsExpanded) "Hide" else "Show",
+                onClick = { sensorsExpanded = !sensorsExpanded }
+            )
+            if (sensorsExpanded) {
+                TurboCard {
+                    if (zones.isEmpty()) {
+                        Text(
+                            "No readable thermal zones on this device.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        zones.forEach { z ->
+                            InfoRow(
+                                z.label,
+                                "%.1f°C".format(z.tempC),
+                                valueColor = tempAccent(z.tempC)
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         // --- Device info ---------------------------------------------------------
