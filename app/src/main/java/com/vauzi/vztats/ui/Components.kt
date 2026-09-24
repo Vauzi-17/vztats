@@ -81,55 +81,6 @@ fun SectionHeader(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun MetricTile(
-    label: String,
-    value: String,
-    unit: String? = null,
-    accent: Color? = null,
-    modifier: Modifier = Modifier
-) {
-    TurboCard(modifier = modifier, padding = 0.dp, radius = Dimens.RadiusM) {
-        Column(Modifier.padding(horizontal = Dimens.SpaceL, vertical = Dimens.SpaceM)) {
-            Text(
-                text = label.uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(
-                    text = value,
-                    fontFamily = NumberFont,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 24.sp,
-                    color = accent ?: MaterialTheme.colorScheme.onSurface
-                )
-                if (unit != null) {
-                    Text(
-                        text = " $unit",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 3.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun StatusPill(text: String, color: Color) {
-    Surface(color = color, shape = CircleShape) {
-        Text(
-            text = text,
-            color = Color.White,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = Dimens.SpaceM + 2.dp, vertical = Dimens.SpaceXS + 2.dp)
-        )
-    }
-}
-
-@Composable
 fun SettingSwitch(
     title: String,
     description: String?,
