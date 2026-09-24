@@ -70,14 +70,19 @@ fun AppRoot(
 
     val context = LocalContext.current
     var sample by remember { mutableStateOf<SystemSample?>(null) }
-    val history = remember { mutableStateListOf<Int>() }
+    val history = remember { mutableStateListOf<FreqPoint>() }
+    // Lives here rather than in HomeScreen so switching tabs keeps the choice.
+    var graphWindow by remember { mutableStateOf(GraphWindow.ONE_MIN) }
 
     LaunchedEffect(Unit) {
         SystemMonitor.sampleFlow(context, periodMs = 1000L).collect { s ->
             sample = s
             s.gpu.freqMhz?.let {
-                history.add(it)
-                if (history.size > MAX_HISTORY) history.removeAt(0)
+                history.add(FreqPoint(s.timestampMs, it))
+                // Trim by age, so the longest window is always fully covered
+                // no matter how regularly samples actually arrived.
+                val cutoff = s.timestampMs - GraphWindow.LONGEST_MS
+                while (history.isNotEmpty() && history[0].timestampMs < cutoff) history.removeAt(0)
             }
         }
     }
@@ -96,7 +101,13 @@ fun AppRoot(
             )
             Box(Modifier.weight(1f)) {
                 when (current) {
-                    Dest.HOME -> HomeScreen(turboState = turboState, sample = sample, history = history)
+                    Dest.HOME -> HomeScreen(
+                        turboState = turboState,
+                        sample = sample,
+                        history = history,
+                        graphWindow = graphWindow,
+                        onGraphWindowChange = { graphWindow = it }
+                    )
                     Dest.SESSIONS -> SessionsScreen()
                     Dest.SETTINGS -> SettingsScreen(
                         themeMode = themeMode,
@@ -238,5 +249,3 @@ private fun ThemeMode.next(): ThemeMode = when (this) {
     ThemeMode.LIGHT -> ThemeMode.DARK
     ThemeMode.DARK -> ThemeMode.SYSTEM
 }
-
-private const val MAX_HISTORY = 60

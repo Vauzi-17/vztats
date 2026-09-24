@@ -9,8 +9,9 @@ import java.util.Locale
  *
  * Even reading `scaling_cur_freq` is blocked by SELinux on some devices; every
  * accessor degrades to null rather than guessing. True CPU utilization needs
- * /proc/stat, which is root-only on many devices — so load is approximated from
- * clock instead (current/max, same idea as GpuSample.loadOfMax).
+ * /proc/stat, which is root-only on many devices — so the only "load" figure
+ * here is a clock ratio (current/max, same idea as GpuSample.loadOfMax), and
+ * the UI labels it as such.
  */
 object CpuMonitor {
 
@@ -43,7 +44,7 @@ object CpuMonitor {
         return max
     }
 
-    fun cpuTempMilliC(): Int? = cpuThermalZone?.let { readInt(File("$it/temp")) }
+    fun cpuTempMilliC(): Int? = ThermalMonitor.primary(SensorGroup.CPU)?.readRaw()?.toInt()
 
     /** Per-core current/max clock in MHz, in core order — null entries where unreadable. */
     fun perCore(): List<CoreFreq> = (0 until coreCount).map { i ->
@@ -55,11 +56,18 @@ object CpuMonitor {
     }
 
     /**
-     * Groups consecutive cores sharing the same max clock and joins the group
-     * sizes with "+", e.g. "4+4" for a typical little.big split. Empty string
-     * if nothing is readable.
+     * Cluster sizes joined with "+", e.g. "4+4" for a typical little.big split.
+     * Empty string if nothing is readable.
+     *
+     * Uses the kernel's cpufreq policy grouping ([policyGroups]) when it's
+     * readable — that is the real frequency domain, and it tells apart clusters
+     * that happen to share a max clock (e.g. "3+2+2+1" rather than "3+4+1").
+     * Otherwise falls back to grouping consecutive cores by max clock.
      */
     fun clusterLabel(cores: List<CoreFreq>): String {
+        policyGroups?.let { groups ->
+            if (groups.sumOf { it.size } == coreCount) return groups.joinToString("+") { it.size.toString() }
+        }
         val groups = mutableListOf<Int>()
         var last: Int? = -1
         for (c in cores) {
@@ -73,20 +81,26 @@ object CpuMonitor {
         return groups.joinToString("+")
     }
 
-    private val cpuThermalZone: String? by lazy { findCpuThermalZone() }
-
-    private fun findCpuThermalZone(): String? {
-        val zones = File("/sys/class/thermal")
-            .listFiles { f -> f.name.startsWith("thermal_zone") } ?: return null
-        for (z in zones) {
-            val type = runCatching { File(z, "type").readText().trim().lowercase(Locale.ROOT) }
-                .getOrNull() ?: continue
-            // Match cpu / cluster / apc style zones, but not the GPU one.
-            if ((type.contains("cpu") || type.contains("apc") || type.contains("cluster")) &&
-                !type.contains("gpu")
-            ) return z.absolutePath
+    /**
+     * Cores grouped by cpufreq policy, from each core's `related_cpus` (the set
+     * of CPUs sharing one clock). Null if any core's node is unreadable, so a
+     * partial read never produces a wrong split. Resolved once: the topology
+     * doesn't change at runtime, and `related_cpus` includes offline cores.
+     */
+    private val policyGroups: List<List<Int>>? by lazy {
+        val seen = HashSet<Int>()
+        val groups = mutableListOf<List<Int>>()
+        for (i in 0 until coreCount) {
+            if (i in seen) continue
+            val related = runCatching {
+                File("$CPU_BASE/cpu$i/cpufreq/related_cpus").readText().trim()
+                    .split(Regex("\\s+")).map { it.toInt() }.sorted()
+            }.getOrNull()
+            if (related.isNullOrEmpty() || i !in related) return@lazy null
+            seen.addAll(related)
+            groups.add(related)
         }
-        return null
+        groups
     }
 
     private fun readLong(f: File): Long? = runCatching { f.readText().trim().toLong() }.getOrNull()
@@ -107,7 +121,11 @@ data class CpuSample(
         get() = curKhzMax?.let { String.format(Locale.ROOT, "%.2f GHz", it / 1_000_000f) }
     val tempC: Float? get() = tempMilliC?.let { it / 1000f }
 
-    /** How close the current clock sits to the maximum (0f..1f) — a load proxy. */
+    /**
+     * Fastest core's current clock divided by the highest max clock (0f..1f).
+     * A clock ratio, NOT CPU utilisation: true usage needs /proc/stat, which is
+     * unreadable without root on modern Android. Shown as "clock %" in the UI.
+     */
     val loadOfMax: Float?
         get() {
             val c = curKhzMax ?: return null

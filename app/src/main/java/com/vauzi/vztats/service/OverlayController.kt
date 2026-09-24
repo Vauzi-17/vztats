@@ -64,6 +64,12 @@ class OverlayController(private val context: Context) {
      */
     private var fitScale = 1f
 
+    /**
+     * How many lines the horizontal bar splits its metrics over. Like
+     * [fitScale] it is recomputed from scratch on every rebuild.
+     */
+    private var horizontalRows = 1
+
     /** Effective scale every dimension and text size is derived from. */
     private var scale = 1f
     private var expandedState = false   // compact only
@@ -231,24 +237,50 @@ class OverlayController(private val context: Context) {
         // the panel happened to look like before.
         fitScale = 1f
         scale = userScale
+        horizontalRows = 1
         populate(container)
 
-        // The horizontal bar is the only layout that must fit the screen width
-        // on a single line. Measure what it naturally wants, and if that
-        // overflows, rebuild once at the exact scale that fits.
-        if (mode == Prefs.MODE_HORIZONTAL) {
-            val natural = measuredWidthOf(container)
-            val available = realScreenWidthPx() - dpRaw(EDGE_MARGIN_DP) * 2
-            if (natural > 0 && available > 0 && natural > available) {
-                fitScale = (available.toFloat() / natural).coerceIn(MIN_FIT_SCALE, 1f)
-                scale = userScale * fitScale
-                populate(container)
-            }
-        }
+        // The horizontal bar is the only layout that must fit the screen width.
+        if (mode == Prefs.MODE_HORIZONTAL) fitHorizontal(container)
 
         clampParamsToScreen()
         if (container.isAttachedToWindow) {
             runCatching { wm.updateViewLayout(container, params) }
+        }
+    }
+
+    /**
+     * Makes the horizontal bar fit the screen width. Shrinking alone used to
+     * bottom out at [MIN_FIT_SCALE] with many metrics enabled, which left the
+     * bar both tiny and still clipped on the right. Instead: use the fewest
+     * lines that fit at a readable size ([MIN_READABLE_FIT]), and only shrink
+     * past that as a last resort.
+     */
+    private fun fitHorizontal(container: DraggableOverlayLayout) {
+        val available = realScreenWidthPx() - dpRaw(EDGE_MARGIN_DP) * 2
+        if (available <= 0) return
+        var natural = measuredWidthOf(container)
+        if (natural <= available) return
+
+        val maxRows = orderedMetrics().size.coerceIn(1, MAX_HORIZONTAL_ROWS)
+        while (horizontalRows < maxRows && available.toFloat() / natural < MIN_READABLE_FIT) {
+            horizontalRows++
+            fitScale = 1f
+            scale = userScale
+            populate(container)
+            natural = measuredWidthOf(container)
+            if (natural <= available) return
+        }
+
+        // Dimensions are rounded to whole pixels and text doesn't scale exactly
+        // linearly, so one proportional shrink can still overshoot by a few px.
+        // Re-measure and correct a few times rather than trusting one estimate.
+        repeat(4) {
+            if (natural <= available || fitScale <= MIN_FIT_SCALE) return
+            fitScale = (fitScale * available.toFloat() / natural * 0.99f).coerceIn(MIN_FIT_SCALE, 1f)
+            scale = userScale * fitScale
+            populate(container)
+            natural = measuredWidthOf(container)
         }
     }
 
@@ -418,18 +450,36 @@ class OverlayController(private val context: Context) {
         // via the Lock button once the row is tapped open.
         dot = null
 
-        // Single row of label + value pairs, separated by hairline dividers.
-        val row = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        orderedMetrics().forEachIndexed { i, key ->
-            if (i > 0) row.addView(divider())
-            row.addView(horizontalCell(key))
+        // Rows of label + value pairs, separated by hairline dividers. Usually a
+        // single row; rebuild() asks for more when one row can't fit.
+        val metrics = orderedMetrics()
+        val perRow = if (metrics.isEmpty()) 1
+        else (metrics.size + horizontalRows - 1) / horizontalRows
+        val rowCells = metrics.chunked(perRow).map { keys -> keys.map { horizontalCell(it) } }
+
+        // Line the cells up in columns when wrapped, so the rows read as a grid.
+        if (rowCells.size > 1) {
+            val colWidths = IntArray(perRow)
+            rowCells.forEach { cells ->
+                cells.forEachIndexed { i, c -> colWidths[i] = maxOf(colWidths[i], measuredWidthOf(c)) }
+            }
+            rowCells.forEach { cells -> cells.forEachIndexed { i, c -> c.minimumWidth = colWidths[i] } }
         }
 
-        // Fitting the row to the screen is handled by rebuild(), which measures
-        // this layout and rebuilds it at a corrected scale if needed. Doing it
+        val rows = rowCells.mapIndexed { r, cells ->
+            LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                if (r > 0) setPadding(0, dp(3f), 0, 0)
+                cells.forEachIndexed { i, cell ->
+                    if (i > 0) addView(divider())
+                    addView(cell)
+                }
+            }
+        }
+
+        // Fitting the bar to the screen is handled by rebuild(), which measures
+        // this layout and rebuilds it with more rows or a corrected scale. Doing it
         // there rather than mutating views here keeps the result dependent only
         // on the current screen, so rotating cannot leave a stale size behind.
 
@@ -438,7 +488,7 @@ class OverlayController(private val context: Context) {
             orientation = LinearLayout.VERTICAL
             background = roundedFill(SURFACE, dp(16f), STROKE)
             setPadding(dp(10f), dp(8f), dp(10f), dp(8f))
-            addView(row)
+            rows.forEach { addView(it) }
             if (showButton) addView(controlRow(topMargin = dp(6f)))
             setOnClickListener { if (!showButton) { showButton = true; rebuild() } }
         }
@@ -452,14 +502,18 @@ class OverlayController(private val context: Context) {
         setBackgroundColor(STROKE)
     }
 
-    /** Short but readable label for the horizontal bar — e.g. "GPU", "GPU%", "GPU°". */
+    /**
+     * Short but readable label for the horizontal bar — e.g. "GPU", "GPUclk",
+     * "GPU°". The *_LOAD metrics are clock ratios (current ÷ max clock), not
+     * utilisation, so they are labelled "clk" rather than a bare "%".
+     */
     private fun metricShortLabel(key: String): String = when (key) {
         Prefs.METRIC_FPS -> "FPS"
         Prefs.METRIC_GPU_FREQ -> "GPU"
-        Prefs.METRIC_GPU_LOAD -> "GPU%"
+        Prefs.METRIC_GPU_LOAD -> "GPUclk"
         Prefs.METRIC_GPU_TEMP -> "GPU°"
         Prefs.METRIC_CPU_FREQ -> "CPU"
-        Prefs.METRIC_CPU_LOAD -> "CPU%"
+        Prefs.METRIC_CPU_LOAD -> "CPUclk"
         Prefs.METRIC_CPU_TEMP -> "CPU°"
         Prefs.METRIC_BATT_POWER -> "mA"
         Prefs.METRIC_BATT_TEMP -> "BAT°"
@@ -617,20 +671,13 @@ class OverlayController(private val context: Context) {
         return picked.takeIf { it in enabled } ?: enabled.first()
     }
 
-    private fun ramPct(): Int? {
-        val p = lastPower ?: return null
-        val used = p.ramUsedMb ?: return null
-        val total = p.ramTotalMb?.takeIf { it > 0 } ?: return null
-        return (used * 100 / total).coerceIn(0, 100)
-    }
-
     private fun metricLabel(key: String): String = when (key) {
         Prefs.METRIC_FPS -> "FPS"
         Prefs.METRIC_GPU_FREQ -> "GPU"
-        Prefs.METRIC_GPU_LOAD -> "GPU %"
+        Prefs.METRIC_GPU_LOAD -> "GPU clock %"
         Prefs.METRIC_GPU_TEMP -> "GPU °C"
         Prefs.METRIC_CPU_FREQ -> "CPU"
-        Prefs.METRIC_CPU_LOAD -> "CPU %"
+        Prefs.METRIC_CPU_LOAD -> "CPU clock %"
         Prefs.METRIC_CPU_TEMP -> "CPU °C"
         Prefs.METRIC_BATT_POWER -> "mA"
         Prefs.METRIC_BATT_TEMP -> "BAT °C"
@@ -653,7 +700,7 @@ class OverlayController(private val context: Context) {
         Prefs.METRIC_BATT_TEMP -> lastPower?.batteryTempC?.let { "${it.roundToInt()}°" } ?: "—"
         Prefs.METRIC_BATT_PCT -> lastPower?.batteryPct?.let { "$it%" } ?: "—"
         Prefs.METRIC_RAM -> lastPower?.ramUsedGbText?.let { "$it GB" } ?: "—"
-        Prefs.METRIC_RAM_PCT -> ramPct()?.let { "$it%" } ?: "—"
+        Prefs.METRIC_RAM_PCT -> lastPower?.ramUsedPct?.let { "$it%" } ?: "—"
         else -> "—"
     }
 
@@ -740,6 +787,15 @@ class OverlayController(private val context: Context) {
 
         /** Floor on the auto-shrink, so the bar stays legible instead of vanishing. */
         private const val MIN_FIT_SCALE = 0.55f
+
+        /**
+         * Below this shrink factor the horizontal bar wraps onto another line
+         * instead of shrinking further.
+         */
+        private const val MIN_READABLE_FIT = 0.85f
+
+        /** Upper bound on horizontal-bar lines before falling back to shrinking. */
+        private const val MAX_HORIZONTAL_ROWS = 3
 
         fun canDraw(context: Context): Boolean = Settings.canDrawOverlays(context)
     }

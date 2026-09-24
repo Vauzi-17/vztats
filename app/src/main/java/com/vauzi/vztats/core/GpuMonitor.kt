@@ -17,6 +17,10 @@ object GpuMonitor {
     private val MAX_GPUCLK = File("$KGSL_DIR/max_gpuclk")
     private val DEVFREQ_MAX = File("$KGSL_DIR/devfreq/max_freq")
     private val AVAILABLE_FREQS = File("$KGSL_DIR/gpu_available_frequencies")
+    private val BUSY_PCT = File("$KGSL_DIR/gpu_busy_percentage")
+    private val GPUBUSY = File("$KGSL_DIR/gpubusy")
+    private val LEADING_INT = Regex("^\\d+")
+    private val WHITESPACE = Regex("\\s+")
 
     /** True if this device exposes the Adreno/KGSL frequency node at all. */
     val isSupported: Boolean get() = GPUCLK.canRead()
@@ -55,17 +59,22 @@ object GpuMonitor {
     }
 
     /** GPU temperature in milli-degrees Celsius, or null if no GPU zone found. */
-    fun gpuTempMilliC(): Int? = gpuThermalZone?.let { readInt(File("$it/temp")) }
+    fun gpuTempMilliC(): Int? = ThermalMonitor.primary(SensorGroup.GPU)?.readRaw()?.toInt()
 
-    private val gpuThermalZone: String? by lazy { findGpuThermalZone() }
-
-    private fun findGpuThermalZone(): String? {
-        val base = File("/sys/class/thermal")
-        val zones = base.listFiles { f -> f.name.startsWith("thermal_zone") } ?: return null
-        // Prefer a zone whose type mentions the GPU (e.g. "gpuss-0", "gpu-usr").
-        for (z in zones) {
-            val type = runCatching { File(z, "type").readText().trim().lowercase() }.getOrNull() ?: continue
-            if (type.contains("gpu")) return z.absolutePath
+    /**
+     * Real GPU utilisation (0..100) as reported by the KGSL driver, or null when
+     * the kernel doesn't expose it or SELinux blocks the read. Unlike
+     * [GpuSample.loadOfMax] this is the driver's own busy counter, not a clock
+     * ratio. Tries `gpu_busy_percentage` ("45 %") first, then derives it from
+     * the `gpubusy` busy/total counters of the driver's last sampling window.
+     */
+    fun busyPercent(): Int? {
+        readRawFile(BUSY_PCT)?.let { txt ->
+            LEADING_INT.find(txt)?.value?.toIntOrNull()?.let { return it.coerceIn(0, 100) }
+        }
+        val parts = readRawFile(GPUBUSY)?.split(WHITESPACE)?.mapNotNull { it.toLongOrNull() }
+        if (parts != null && parts.size >= 2 && parts[1] > 0L) {
+            return (parts[0] * 100L / parts[1]).toInt().coerceIn(0, 100)
         }
         return null
     }
@@ -76,9 +85,10 @@ object GpuMonitor {
     private fun readInt(f: File): Int? =
         runCatching { f.readText().trim().toInt() }.getOrNull()
 
-    private fun readRaw(name: String): String? =
-        runCatching { File("$KGSL_DIR/$name").readText().trim() }
-            .getOrNull()?.takeIf { it.isNotEmpty() }
+    private fun readRaw(name: String): String? = readRawFile(File("$KGSL_DIR/$name"))
+
+    private fun readRawFile(f: File): String? =
+        runCatching { f.readText().trim() }.getOrNull()?.takeIf { it.isNotEmpty() }
 
     /**
      * One-shot dump of the KGSL power/frequency description. The app can read
@@ -127,7 +137,8 @@ object GpuMonitor {
                     freqHz = currentFreqHz(),
                     maxFreqHz = max ?: maxFreqHz(),
                     tempMilliC = gpuTempMilliC(),
-                    timestampMs = System.currentTimeMillis()
+                    timestampMs = System.currentTimeMillis(),
+                    busyPct = busyPercent()
                 )
             )
             delay(periodMs)
@@ -139,13 +150,18 @@ data class GpuSample(
     val freqHz: Long?,
     val maxFreqHz: Long?,
     val tempMilliC: Int?,
-    val timestampMs: Long
+    val timestampMs: Long,
+    /** Driver-reported utilisation 0..100, null where the kernel doesn't expose it. */
+    val busyPct: Int? = null
 ) {
     val freqMhz: Int? get() = freqHz?.let { (it / 1_000_000L).toInt() }
     val maxFreqMhz: Int? get() = maxFreqHz?.let { (it / 1_000_000L).toInt() }
     val tempC: Float? get() = tempMilliC?.let { it / 1000f }
 
-    /** How close the current clock sits to the maximum (0f..1f). */
+    /**
+     * How close the current clock sits to the maximum (0f..1f). This is a clock
+     * ratio, NOT utilisation — see [busyPct] for the driver's busy counter.
+     */
     val loadOfMax: Float?
         get() {
             val f = freqHz ?: return null
