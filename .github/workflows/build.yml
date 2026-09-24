@@ -232,7 +232,7 @@ jobs:
 
   # Separate job so only publishing gets write access to the repository.
   publish:
-    name: GitHub Release ${{ needs.build.outputs.tag }}
+    name: Publish GitHub Release
     needs: build
     if: inputs.build_type == 'release' && needs.build.outputs.signed == 'true'
     runs-on: ubuntu-latest
