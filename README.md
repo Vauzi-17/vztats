@@ -7,7 +7,7 @@
 **A no-root performance monitor for Android — with an Adreno GPU clock lock built in.**
 
 [![Pre-release](https://img.shields.io/badge/status-pre--release-orange)](https://github.com/Vauzi-17/vztats/releases)
-[![Version](https://img.shields.io/badge/version-0.1-blue)](https://github.com/Vauzi-17/vztats/releases)
+[![Version](https://img.shields.io/badge/version-0.2-blue)](https://github.com/Vauzi-17/vztats/releases)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 </div>
@@ -15,7 +15,7 @@
 ---
 
 > [!WARNING]
-> **This is an early pre-release (v0.1).**
+> **This is an early pre-release (v0.2).**
 > VZtats is not feature-complete and **bugs are expected**. Some monitors are still
 > missing, some readings are approximations, and the UI is still changing between
 > releases. Use it as a preview, not as a daily-driver tool you rely on.
@@ -118,7 +118,7 @@ start it, then pair it from **Settings → Shizuku** inside VZtats.
 
 ## Known limitations & bugs
 
-Being upfront about what isn't done yet in v0.1:
+Being upfront about what isn't done yet in v0.2:
 
 - **There is no CPU utilisation reading.** True per-core usage needs `/proc/stat`,
   which is unreadable without root on modern Android. VZtats shows **Clock %**

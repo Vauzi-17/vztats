@@ -85,14 +85,38 @@ supported device can verify it.
 
 `.github/workflows/build.yml` builds an APK on demand from any branch, tag or
 commit: **Actions → Build APK → Run workflow**. Enter the branch and pick
-`debug` or `release`. The APK is attached to the run as an artifact.
+`debug` or `release`.
 
 It installs the same toolchain this page and `app/build.gradle.kts` pin
 (JDK 17, platform 36, build-tools 36.1.0, NDK 27.0.12077973, CMake 3.22.1).
 If you change a version in `app/build.gradle.kts`, change it in the
 workflow's `env:` block as well.
 
-Release builds are signed only when all four repository secrets are set:
+| Build type | APK name | Where it goes |
+|---|---|---|
+| `debug` | `VZtats-v<version>-debug-<branch>-<commit>.apk` | Run artifact only |
+| `release` | `VZtats-v<version>.apk` | Run artifact **and** a GitHub Release |
+
+### Releasing a new version
+
+1. Bump `versionCode` (always +1) and `versionName` in `app/build.gradle.kts`.
+   `versionName` becomes the release tag (e.g. `0.2`, same style as `0.1`).
+2. Write the user-facing notes in `docs/releases/<versionName>.md`
+   (e.g. `docs/releases/0.2.md`). Commit both to `main`.
+3. Run **Build APK** with branch `main` and build type `release`.
+
+The workflow stops within seconds if the notes file is missing or the tag
+already exists, before spending time on a build. The GitHub Release body is
+your notes file, followed by a download table (file, size, SHA-256) and
+GitHub's generated list of changes since the previous release.
+
+**Draft** (default: on) creates the release as a draft, so you can read it and
+press *Publish* yourself. **Pre-release** (default: on) keeps the
+pre-release badge while the app is in 0.x.
+
+Releases are signed only when all four repository secrets are set. Use the
+**same keystore as earlier releases**, or Android refuses to install the
+update over them:
 
 | Secret | Value |
 |---|---|
@@ -101,7 +125,9 @@ Release builds are signed only when all four repository secrets are set:
 | `VZTATS_KEYALIAS` | key alias |
 | `VZTATS_KEYPASSWORD` | key password |
 
-Without them the release build still runs and produces `app-release-unsigned.apk`.
+Without them the release build still runs and uploads
+`VZtats-v<version>-unsigned.apk` as an artifact, but no GitHub Release is
+created, because an unsigned APK can't be installed.
 
 ## Project layout
 
