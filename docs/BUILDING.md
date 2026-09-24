@@ -81,6 +81,28 @@ supported device can verify it.
 > different one, and a lost keystore cannot be recovered — it would mean
 > publishing under a new package name and asking users to reinstall.
 
+## Building on GitHub Actions
+
+`.github/workflows/build.yml` builds an APK on demand from any branch, tag or
+commit: **Actions → Build APK → Run workflow**. Enter the branch and pick
+`debug` or `release`. The APK is attached to the run as an artifact.
+
+It installs the same toolchain this page and `app/build.gradle.kts` pin
+(JDK 17, platform 36, build-tools 36.1.0, NDK 27.0.12077973, CMake 3.22.1).
+If you change a version in `app/build.gradle.kts`, change it in the
+workflow's `env:` block as well.
+
+Release builds are signed only when all four repository secrets are set:
+
+| Secret | Value |
+|---|---|
+| `VZTATS_KEYSTORE_BASE64` | `base64 -w0 vztats-release.jks` |
+| `VZTATS_STOREPASSWORD` | keystore password |
+| `VZTATS_KEYALIAS` | key alias |
+| `VZTATS_KEYPASSWORD` | key password |
+
+Without them the release build still runs and produces `app-release-unsigned.apk`.
+
 ## Project layout
 
 | Path | What's in it |
