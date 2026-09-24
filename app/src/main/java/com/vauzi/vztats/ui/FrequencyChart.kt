@@ -11,6 +11,41 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 
+/** One GPU clock reading, timestamped so the graph can window by real time. */
+data class FreqPoint(val timestampMs: Long, val mhz: Int)
+
+/** Selectable time span of the GPU frequency graph. */
+enum class GraphWindow(val label: String, val longLabel: String, val ms: Long) {
+    THIRTY_SEC("30s", "30 s", 30_000L),
+    ONE_MIN("1m", "1 min", 60_000L),
+    FIVE_MIN("5m", "5 min", 300_000L);
+
+    companion object {
+        /** How much history must be kept for the longest window. */
+        val LONGEST_MS: Long = entries.maxOf { it.ms }
+    }
+}
+
+/** Current / average / peak over one window, plus how much time it really covers. */
+data class WindowStats(val nowMhz: Int, val avgMhz: Int, val peakMhz: Int, val spanSec: Int)
+
+/** The points inside [window], measured back from the newest point. */
+fun List<FreqPoint>.inWindow(window: GraphWindow): List<FreqPoint> {
+    val newest = lastOrNull() ?: return emptyList()
+    val cutoff = newest.timestampMs - window.ms
+    return filter { it.timestampMs >= cutoff }
+}
+
+fun List<FreqPoint>.stats(): WindowStats? {
+    if (isEmpty()) return null
+    return WindowStats(
+        nowMhz = last().mhz,
+        avgMhz = (sumOf { it.mhz.toLong() } / size).toInt(),
+        peakMhz = maxOf { it.mhz },
+        spanSec = ((last().timestampMs - first().timestampMs) / 1000L).toInt()
+    )
+}
+
 @Composable
 fun FrequencyChart(
     history: List<Int>,
