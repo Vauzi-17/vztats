@@ -97,15 +97,16 @@ jobs:
             echo "VZTATS_KEYPASSWORD=$KEY_PASSWORD"
           } >> "$GITHUB_ENV"
 
+      # gradle.properties pins org.gradle.java.home to a local Windows JDK path
+      # for the maintainer's machine. A -D flag on the command line takes
+      # precedence over the project's gradle.properties, so CI points Gradle at
+      # the JDK installed above without touching that local setup.
       - name: Build ${{ inputs.build_type }} APK
         env:
           BUILD_TYPE: ${{ inputs.build_type }}
         run: |
-          if [ "$BUILD_TYPE" = "release" ]; then
-            ./gradlew --no-daemon assembleRelease
-          else
-            ./gradlew --no-daemon assembleDebug
-          fi
+          if [ "$BUILD_TYPE" = "release" ]; then TASK=assembleRelease; else TASK=assembleDebug; fi
+          ./gradlew --no-daemon -Dorg.gradle.java.home="$JAVA_HOME" "$TASK"
 
       - name: Collect build info
         id: info
