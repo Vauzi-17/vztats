@@ -44,9 +44,12 @@ android {
         // <= targetSdk, and a lower minSdk also supports more old devices.
         minSdk = 25
         targetSdk = 25
-        // First public pre-release.
-        versionCode = 1
-        versionName = "0.1"
+        // Bump both for every release. versionName is also the release tag and
+        // picks docs/releases/<versionName>.md as the notes (see the Build APK
+        // workflow). versionCode must always increase, or Android refuses the
+        // update.
+        versionCode = 2
+        versionName = "0.2"
 
         ndk {
             abiFilters += "arm64-v8a"
