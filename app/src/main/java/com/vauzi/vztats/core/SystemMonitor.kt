@@ -27,7 +27,8 @@ object SystemMonitor {
                 freqHz = GpuMonitor.currentFreqHz(),
                 maxFreqHz = gpuMaxHz ?: GpuMonitor.maxFreqHz(),
                 tempMilliC = GpuMonitor.gpuTempMilliC(),
-                timestampMs = now
+                timestampMs = now,
+                busyPct = GpuMonitor.busyPercent()
             ),
             cpu = CpuSample(
                 curKhzMax = CpuMonitor.curFreqKhzMax(),

@@ -16,11 +16,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -35,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vauzi.vztats.core.ApplyOutcome
@@ -50,19 +53,26 @@ import com.vauzi.vztats.ui.theme.Dimens
 import com.vauzi.vztats.ui.theme.TurboAmber
 import com.vauzi.vztats.ui.theme.TurboGreen
 import com.vauzi.vztats.ui.theme.TurboRed
+import java.util.Locale
+import kotlin.math.roundToInt
 
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
     turboState: TurboState,
     sample: SystemSample?,
-    history: List<Int>
+    history: List<FreqPoint>,
+    graphWindow: GraphWindow,
+    onGraphWindowChange: (GraphWindow) -> Unit
 ) {
     val context = LocalContext.current
     val gpu = sample?.gpu
     val cpu = sample?.cpu
     val power = sample?.power
     val clusterLabel = cpu?.perCore?.takeIf { it.isNotEmpty() }?.let { CpuMonitor.clusterLabel(it) }
+    // The KGSL description is static for the life of the process; read it once
+    // instead of on every 1 s recomposition.
+    val gpuDetails = remember { GpuMonitor.readDetails() }
 
     Column(
         modifier
@@ -73,8 +83,16 @@ fun HomeScreen(
     ) {
         Spacer(Modifier.height(Dimens.SpaceXS))
 
-        // --- GPU & turbo ---------------------------------------------------------
+        // --- GPU (with the lock as one of its controls) --------------------------
         TurboCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CardTitle("GPU", gpuDetails.model, Modifier.weight(1f))
+                LockButton(
+                    on = turboState.desiredOn,
+                    onToggle = { TurboManager.setTurbo(context, !turboState.desiredOn) }
+                )
+            }
+            Spacer(Modifier.height(Dimens.SpaceM))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RingStat(
                     fraction = gpu?.loadOfMax ?: 0f,
@@ -89,25 +107,32 @@ fun HomeScreen(
                         .padding(start = Dimens.SpaceL),
                     verticalArrangement = Arrangement.spacedBy(Dimens.SpaceXS)
                 ) {
-                    val (pillText, pillColor) = statusFor(turboState, gpu?.isAtMax == true)
-                    StatusPill(pillText, pillColor)
-                    CardStatLine("Max", gpu?.maxFreqMhz?.let { "$it MHz" } ?: "—")
+                    CardStatLine("Clock", mhzOfMax(gpu?.freqMhz, gpu?.maxFreqMhz))
+                    CardStatLine("Of max", gpu?.loadOfMax?.let { "${(it * 100).roundToInt()}%" } ?: "—")
+                    // Only where the driver exposes a busy counter — no placeholder
+                    // otherwise, and never a clock ratio passed off as load.
+                    gpu?.busyPct?.let { CardStatLine("Load", "$it%") }
                     CardStatLine(
                         "Temp",
                         gpu?.tempC?.let { "%.0f°C".format(it) } ?: "—",
                         tempAccent(gpu?.tempC)
                     )
-                    Spacer(Modifier.height(Dimens.SpaceXS))
-                    PowerButton(
-                        on = turboState.desiredOn,
-                        onToggle = { TurboManager.setTurbo(context, !turboState.desiredOn) }
-                    )
                 }
+            }
+            lockStatus(turboState, gpu?.isAtMax == true)?.let { (text, color) ->
+                Spacer(Modifier.height(Dimens.SpaceS))
+                StatusLine(text, color)
             }
         }
 
         // --- CPU -------------------------------------------------------------------
         TurboCard {
+            CardTitle(
+                "CPU",
+                if (clusterLabel.isNullOrEmpty()) "${CpuMonitor.coreCount} cores"
+                else "${CpuMonitor.coreCount} cores · $clusterLabel"
+            )
+            Spacer(Modifier.height(Dimens.SpaceM))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RingStat(
                     fraction = cpu?.loadOfMax ?: 0f,
@@ -121,11 +146,8 @@ fun HomeScreen(
                         .padding(start = Dimens.SpaceL),
                     verticalArrangement = Arrangement.spacedBy(Dimens.SpaceXS)
                 ) {
-                    Text(
-                        if (clusterLabel.isNullOrEmpty()) "CPU" else "CPU ($clusterLabel)",
-                        style = MaterialTheme.typography.titleSmall
-                    )
                     CardStatLine("Max", cpu?.maxMhz?.let { "%.2f GHz".format(it / 1000f) } ?: "—")
+                    CardStatLine("Clock %", cpu?.loadOfMax?.let { "${(it * 100).roundToInt()}%" } ?: "—")
                     CardStatLine(
                         "Temp",
                         cpu?.tempC?.let { "%.0f°C".format(it) } ?: "—",
@@ -137,18 +159,17 @@ fun HomeScreen(
                 Spacer(Modifier.height(Dimens.SpaceM))
                 CoreGrid(cpu!!.perCore)
             }
+            Footnote("Clock % = fastest core ÷ max clock. Not CPU utilisation.")
         }
 
         // --- Memory & battery --------------------------------------------------
         TurboCard {
-            val ramPct = power?.ramUsedMb?.let { used ->
-                power.ramTotalMb?.takeIf { it > 0 }?.let { total -> used.toFloat() / total.toFloat() }
-            }
             Row(verticalAlignment = Alignment.CenterVertically) {
+                val ramPct = power?.ramUsedPct
                 RingStat(
-                    fraction = ramPct ?: 0f,
-                    centerValue = ramPct?.let { (it * 100).toInt().toString() } ?: "—",
-                    subLabel = "%",
+                    fraction = (ramPct ?: 0) / 100f,
+                    centerValue = ramPct?.toString() ?: "—",
+                    subLabel = "% RAM",
                     modifier = Modifier.size(84.dp)
                 )
                 Column(
@@ -157,78 +178,101 @@ fun HomeScreen(
                         .padding(start = Dimens.SpaceL),
                     verticalArrangement = Arrangement.spacedBy(Dimens.SpaceXS)
                 ) {
-                    Text("Memory & battery", style = MaterialTheme.typography.titleSmall)
+                    Text("Memory", style = MaterialTheme.typography.titleSmall)
                     CardStatLine(
-                        "RAM",
+                        "Used",
                         if (power?.ramUsedGbText != null && power.ramTotalGbText != null)
                             "${power.ramUsedGbText} / ${power.ramTotalGbText} GB" else "—"
                     )
                     CardStatLine(
-                        if (power?.charging == true) "Charging" else "Battery",
-                        power?.batteryPct?.let { "$it%" } ?: "—"
-                    )
-                    CardStatLine(
-                        "Batt temp",
-                        power?.batteryTempC?.let { "%.0f°C".format(it) } ?: "—",
-                        tempAccent(power?.batteryTempC)
+                        "Available",
+                        power?.ramAvailMb?.let { "%.1f GB".format(Locale.ROOT, it / 1024f) } ?: "—"
                     )
                 }
             }
+
+            HorizontalDivider(
+                Modifier.padding(vertical = Dimens.SpaceM),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CardTitle(
+                    "Battery",
+                    listOfNotNull(power?.status?.label, power?.pluggedSource).joinToString(" · ")
+                        .ifEmpty { null },
+                    Modifier.weight(1f)
+                )
+                Text(
+                    power?.batteryPct?.let { "$it%" } ?: "—",
+                    fontFamily = NumberFont,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 20.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Spacer(Modifier.height(Dimens.SpaceS))
+            // Only values the platform actually reported; nothing is estimated.
+            MiniStatGrid(
+                listOfNotNull(
+                    power?.batteryTempC?.let { MiniStat("Temp", "%.0f°C".format(it), tempAccent(it)) },
+                    power?.currentMa?.let { MiniStat("Current", "$it mA") },
+                    power?.voltageMv?.let { MiniStat("Voltage", "%.2f V".format(Locale.ROOT, it / 1000f)) },
+                    power?.powerW?.let { MiniStat("Power", "%.2f W".format(Locale.ROOT, it)) }
+                )
+            )
         }
 
-        // --- GPU frequency chart ------------------------------------------------
+        // --- Performance: FPS + GPU frequency graph ------------------------------
         TurboCard {
-            Text(
-                "GPU frequency",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface
+            val windowed = history.inWindow(graphWindow)
+            val stats = windowed.stats()
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CardTitle("Performance", "GPU clock · KGSL", Modifier.weight(1f))
+                Text(
+                    "FPS ",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    sample?.fps?.toString() ?: "—",
+                    fontFamily = NumberFont,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 20.sp,
+                    color = fpsAccent(sample?.fps) ?: MaterialTheme.colorScheme.onSurface
+                )
+            }
+            if (sample?.fps == null) {
+                Footnote("FPS needs the Shizuku sampler (pair it in Settings).")
+            }
+
+            Spacer(Modifier.height(Dimens.SpaceM))
+            SegmentedControl(
+                options = GraphWindow.entries.map { it.label },
+                selectedIndex = graphWindow.ordinal,
+                onSelect = { onGraphWindowChange(GraphWindow.entries[it]) }
             )
-            Text(
-                "Last ${history.size}s — read from /sys/class/kgsl",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Dimens.SpaceXS)
+            Spacer(Modifier.height(Dimens.SpaceM))
+            MiniStatGrid(
+                listOf(
+                    MiniStat("Now", stats?.let { "${it.nowMhz} MHz" } ?: "—"),
+                    MiniStat("Average", stats?.let { "${it.avgMhz} MHz" } ?: "—"),
+                    MiniStat("Peak", stats?.let { "${it.peakMhz} MHz" } ?: "—")
+                )
             )
             FrequencyChart(
-                history = history,
+                history = windowed.map { it.mhz },
                 maxMhz = gpu?.maxFreqMhz,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(120.dp)
                     .padding(top = Dimens.SpaceM)
             )
-            if (gpu?.isAtMax == true) {
-                Text(
-                    "Clock at reported maximum — GPU lock working.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TurboGreen,
-                    modifier = Modifier.padding(top = Dimens.SpaceS)
-                )
-            }
-        }
-
-        // --- Frame rate --------------------------------------------------------
-        Row(horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceS)) {
-            MetricTile(
-                label = "FPS",
-                value = sample?.fps?.toString() ?: "—",
-                unit = "fps",
-                accent = fpsAccent(sample?.fps),
-                modifier = Modifier.weight(1f)
-            )
-            MetricTile(
-                label = if (power?.charging == true) "Charging" else "Battery",
-                value = power?.batteryPct?.toString() ?: "—",
-                unit = "%",
-                modifier = Modifier.weight(1f)
-            )
-        }
-        if (sample?.fps == null) {
-            Text(
-                "FPS needs the Shizuku sampler (pair it in Settings).",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = Dimens.SpaceXS)
+            Footnote(
+                if (stats != null && stats.spanSec + 1 < graphWindow.ms / 1000L)
+                    "Last ${graphWindow.longLabel} — ${stats.spanSec} s collected so far. Dashed line = max clock."
+                else "Last ${graphWindow.longLabel}. Dashed line = max clock."
             )
         }
 
@@ -280,8 +324,9 @@ fun HomeScreen(
             )
         }
         TurboCard {
-            val details = GpuMonitor.readDetails()
-            val gpuMax = details.ceilingMhz ?: details.observedMaxMhz
+            val details = gpuDetails
+            // observedMaxMhz in the cached snapshot is stale; ask for the live one.
+            val gpuMax = details.ceilingMhz ?: GpuMonitor.observedMaxMhz
             InfoRow("GPU model", details.model ?: "—")
             InfoRow("GPU max clock", gpuMax?.let { "$it MHz" } ?: "—")
             InfoRow("GPU governor", details.governor ?: "—")
@@ -358,35 +403,116 @@ private fun CardStatLine(label: String, value: String, accent: Color? = null) {
     }
 }
 
+/** Card heading with an optional muted qualifier, e.g. "GPU  Adreno 740". */
 @Composable
-private fun PowerButton(on: Boolean, onToggle: () -> Unit) {
+private fun CardTitle(title: String, qualifier: String?, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.Bottom) {
+        Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+        if (!qualifier.isNullOrEmpty()) {
+            Text(
+                "  $qualifier",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun Footnote(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = Dimens.SpaceS)
+    )
+}
+
+/** Small coloured dot + text — the lock's state, sized as a detail of the GPU card. */
+@Composable
+private fun StatusLine(text: String, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Spacer(
+            Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(color)
+        )
+        Spacer(Modifier.width(Dimens.SpaceS))
+        Text(text, style = MaterialTheme.typography.bodySmall, color = color)
+    }
+}
+
+private data class MiniStat(val label: String, val value: String, val accent: Color? = null)
+
+/** Label-over-value stats laid out three per row — denser than a card per metric. */
+@Composable
+private fun MiniStatGrid(items: List<MiniStat>) {
+    if (items.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(Dimens.SpaceS)) {
+        items.chunked(3).forEach { row ->
+            Row(Modifier.fillMaxWidth()) {
+                row.forEach { item ->
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            item.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            item.value,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontFamily = NumberFont,
+                            fontWeight = FontWeight.Medium,
+                            color = item.accent ?: MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1
+                        )
+                    }
+                }
+                // Keep columns aligned when the last row is short.
+                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+private fun mhzOfMax(cur: Int?, max: Int?): String = when {
+    cur == null && max == null -> "—"
+    max == null -> "$cur MHz"
+    else -> "${cur ?: "—"} / $max MHz"
+}
+
+/** Compact GPU Lock toggle, sized to sit in the GPU card's header. */
+@Composable
+private fun LockButton(on: Boolean, onToggle: () -> Unit) {
     val bg by animateColorAsState(
         if (on) MaterialTheme.colorScheme.primary
-        else MaterialTheme.colorScheme.surfaceVariant,
+        else MaterialTheme.colorScheme.surface,
         label = "btn-bg"
     )
-    val fg = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    val fg = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         Modifier
             .clip(RoundedCornerShape(Dimens.RadiusL))
             .background(bg)
             .clickable { onToggle() }
-            .padding(horizontal = Dimens.SpaceM, vertical = Dimens.SpaceS),
+            .padding(horizontal = Dimens.SpaceM - 2.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             Icons.Filled.PowerSettingsNew,
             contentDescription = null,
             tint = fg,
-            modifier = Modifier.size(16.dp)
+            modifier = Modifier.size(14.dp)
         )
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(4.dp))
         Text(
-            text = if (on) "LOCK ON" else "LOCK OFF",
+            text = if (on) "Lock on" else "Lock off",
             color = fg,
             style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 0.5.sp
+            fontWeight = FontWeight.SemiBold
         )
     }
 }
@@ -405,13 +531,18 @@ private fun fpsAccent(fps: Int?): Color? = when {
     else -> TurboRed
 }
 
-private fun statusFor(state: TurboState, atMax: Boolean): Pair<String, Color> {
-    if (!state.desiredOn) return "Lock off" to TurboRed.copy(alpha = 0.5f)
+/**
+ * GPU Lock status line, or null while the lock is off (the button already says
+ * so). Same states and wording as before; "verified" still means the live clock
+ * reached the reported maximum.
+ */
+private fun lockStatus(state: TurboState, atMax: Boolean): Pair<String, Color>? {
+    if (!state.desiredOn) return null
     return when (state.outcome) {
-        ApplyOutcome.UNSUPPORTED -> "Not supported" to TurboRed
-        ApplyOutcome.FAILED -> "Kernel rejected" to TurboRed
+        ApplyOutcome.UNSUPPORTED -> "Lock: not supported" to TurboRed
+        ApplyOutcome.FAILED -> "Lock: kernel rejected" to TurboRed
         ApplyOutcome.APPLIED, ApplyOutcome.NONE ->
-            if (atMax) "Active — verified" to TurboGreen
-            else "Applied — waiting" to TurboAmber
+            if (atMax) "Lock: active — verified at max clock" to TurboGreen
+            else "Lock: applied — waiting for max clock" to TurboAmber
     }
 }
