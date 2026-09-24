@@ -1,0 +1,141 @@
+name: Build APK
+
+# Manual build of any branch, tag or commit. Run it from the Actions tab:
+# "Build APK" -> "Run workflow", then type the branch to build.
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch, tag or commit SHA to build
+        required: true
+        default: main
+        type: string
+      build_type:
+        description: Build type
+        required: true
+        default: debug
+        type: choice
+        options:
+          - debug
+          - release
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ inputs.branch }}-${{ inputs.build_type }}
+  cancel-in-progress: true
+
+# Toolchain versions. Keep these in sync with app/build.gradle.kts
+# (compileSdk, buildToolsVersion, ndkVersion, cmake version) and
+# docs/BUILDING.md (JDK 17-21).
+env:
+  JAVA_VERSION: "17"
+  COMPILE_SDK: "36"
+  BUILD_TOOLS_VERSION: "36.1.0"
+  NDK_VERSION: "27.0.12077973"
+  CMAKE_VERSION: "3.22.1"
+
+jobs:
+  build:
+    name: ${{ inputs.build_type }} @ ${{ inputs.branch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out ${{ inputs.branch }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      # The runner image ships the Android command-line tools; only the exact
+      # platform / build-tools / NDK / CMake versions the project pins are added.
+      - name: Install Android SDK packages
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null
+          "$SDKMANAGER" --install \
+            "platforms;android-${COMPILE_SDK}" \
+            "build-tools;${BUILD_TOOLS_VERSION}" \
+            "ndk;${NDK_VERSION}" \
+            "cmake;${CMAKE_VERSION}"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # gradlew is committed without the executable bit.
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      # Release signing is optional. With the four VZTATS_* secrets set, the
+      # release APK is signed; without them the build still succeeds and
+      # produces app-release-unsigned.apk (see docs/BUILDING.md).
+      - name: Prepare release keystore
+        if: inputs.build_type == 'release'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.VZTATS_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.VZTATS_STOREPASSWORD }}
+          KEY_ALIAS: ${{ secrets.VZTATS_KEYALIAS }}
+          KEY_PASSWORD: ${{ secrets.VZTATS_KEYPASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::warning::Signing secrets not set - building an unsigned release APK."
+            exit 0
+          fi
+          KEYSTORE="$RUNNER_TEMP/vztats-release.jks"
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+          {
+            echo "VZTATS_STOREFILE=$KEYSTORE"
+            echo "VZTATS_STOREPASSWORD=$STORE_PASSWORD"
+            echo "VZTATS_KEYALIAS=$KEY_ALIAS"
+            echo "VZTATS_KEYPASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Build ${{ inputs.build_type }} APK
+        env:
+          BUILD_TYPE: ${{ inputs.build_type }}
+        run: |
+          if [ "$BUILD_TYPE" = "release" ]; then
+            ./gradlew --no-daemon assembleRelease
+          else
+            ./gradlew --no-daemon assembleDebug
+          fi
+
+      - name: Collect build info
+        id: info
+        env:
+          BRANCH: ${{ inputs.branch }}
+          BUILD_TYPE: ${{ inputs.build_type }}
+        run: |
+          VERSION=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          # Artifact names may not contain "/", so feature/foo -> feature-foo.
+          SAFE_BRANCH=$(echo "$BRANCH" | tr '/\\:<>|*?"' '-')
+          echo "artifact=vztats-${VERSION}-${BUILD_TYPE}-${SAFE_BRANCH}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          {
+            echo "### VZtats ${VERSION} (${BUILD_TYPE})"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Branch | \`${BRANCH}\` |"
+            echo "| Commit | \`${SHORT_SHA}\` |"
+            echo "| APKs | $(ls app/build/outputs/apk/${BUILD_TYPE}/*.apk | xargs -n1 basename | tr '\n' ' ') |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.info.outputs.artifact }}
+          path: app/build/outputs/apk/${{ inputs.build_type }}/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/vztats-release.jks"
