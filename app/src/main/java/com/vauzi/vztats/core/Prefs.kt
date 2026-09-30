@@ -74,6 +74,27 @@ class Prefs private constructor(private val sp: SharedPreferences) {
         get() = sp.getStringSet(KEY_GAME_PKGS, emptySet())?.toSet() ?: emptySet()
         set(value) = sp.edit().putStringSet(KEY_GAME_PKGS, value).apply()
 
+    // --- RAM cleaner ---------------------------------------------------------
+
+    /** Apps the user ticked in the RAM cleaner; remembered between scans. */
+    var ramCleanSelected: Set<String>
+        get() = sp.getStringSet(KEY_RAM_SELECTED, emptySet())?.toSet() ?: emptySet()
+        set(value) = sp.edit().putStringSet(KEY_RAM_SELECTED, value).apply()
+
+    /**
+     * Apps the RAM cleaner blocked from the background, with the settings they
+     * had before (JSON, see RamCleaner.blocked). Written with commit() because
+     * losing it would leave apps restricted with nothing to restore them from.
+     */
+    var ramBlockedJson: String
+        get() = sp.getString(KEY_RAM_BLOCKED, "") ?: ""
+        set(value) { sp.edit().putString(KEY_RAM_BLOCKED, value).commit() }
+
+    /** RAM usage the cleaner aims for, in percent of total. */
+    var ramTargetPct: Int
+        get() = sp.getInt(KEY_RAM_TARGET, DEFAULT_RAM_TARGET)
+        set(value) = sp.edit().putInt(KEY_RAM_TARGET, value).apply()
+
     // --- Floating window customisation ---------------------------------------
 
     /** Which metrics the floating panel shows, as a set of METRIC_* keys. */
@@ -126,11 +147,15 @@ class Prefs private constructor(private val sp: SharedPreferences) {
         const val KEY_FLOAT_OPACITY = "floating_opacity"
         const val KEY_FLOAT_SIZE = "floating_size"
         const val KEY_FLOAT_COMPACT_METRIC = "floating_compact_metric"
+        const val KEY_RAM_SELECTED = "ram_clean_selected"
+        const val KEY_RAM_BLOCKED = "ram_clean_blocked"
+        const val KEY_RAM_TARGET = "ram_clean_target_pct"
 
         const val DEFAULT_TEMP_LIMIT = 48
         const val DEFAULT_BATT_LIMIT = 15
         const val DEFAULT_OPACITY = 90
         const val DEFAULT_SIZE = 100
+        const val DEFAULT_RAM_TARGET = 30
 
         const val MODE_COMPACT = "compact"
         const val MODE_HORIZONTAL = "horizontal"

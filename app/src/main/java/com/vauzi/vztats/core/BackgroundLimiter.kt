@@ -46,9 +46,13 @@ object BackgroundLimiter {
         val pm = context.packageManager
         val installed = runCatching { pm.getInstalledApplications(0) }.getOrNull() ?: return emptyList()
         val self = context.packageName
+        // Apps the RAM cleaner blocked are already restricted, and restore()
+        // here would set them back to "active" behind the cleaner's back.
+        val cleanerBlocked = RamCleaner.blocked(context).keys
         return installed.asSequence()
             .filter { ai ->
                 ai.packageName != self &&
+                    ai.packageName !in cleanerBlocked &&
                     ai.packageName != gamePackage &&
                     (ai.flags and ApplicationInfo.FLAG_SYSTEM) == 0 &&
                     (ai.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) == 0
