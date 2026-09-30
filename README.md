@@ -76,6 +76,15 @@ lock is still here — it's now one feature among several rather than the whole 
 - Keep-alive service that re-applies the lock after the screen unlocks
 - Optional auto-safety: release the lock above a temperature limit or below a battery floor
 
+**RAM cleaner** (needs Shizuku)
+- Measures each app's memory with `dumpsys meminfo` and shows how much it can
+  actually give back, plus the lowest RAM usage reachable on your device right now
+- Set a target (e.g. 30%) and see whether the apps you picked get you there
+- Stops the picked apps and blocks them from running in the background, then
+  reports the **measured** result next to the estimate
+- **Restore** puts every blocked app's previous background settings back, so it
+  runs and notifies as before, without needing to open it
+
 **Gaming automation**
 - Pick which apps count as games (emulators like Winlator included)
 - Auto-free background RAM when a game launches
@@ -130,6 +139,13 @@ Being upfront about what isn't done yet in v0.2:
   doesn't try to guess a correction, so on those devices current and power read wrong.
   Voltages outside a single-cell range (2.5–5 V) are hidden rather than shown.
 - **No process or thread monitor yet.** Planned via Shizuku, not implemented.
+- **The RAM cleaner can't go below what Android itself needs.** Kernel, drivers,
+  system services, the launcher, the keyboard and Play services are never touched,
+  so on many phones a target like 30% is not reachable; the cleaner shows the
+  realistic floor instead of promising it. **Blocked apps don't send notifications**
+  until you restore them. Blocking needs Android 9+; on older versions apps are only
+  stopped and may start again. Per-app sizes are estimates from `dumpsys meminfo`,
+  and the freed amount is measured afterwards.
 - **CPU and GPU temperatures come from one sensor each**: the first thermal zone
   whose name matches. Every zone the kernel exposes is listed under
   *Temperature sensors* on Home, but per-cluster or per-sensor picking is not

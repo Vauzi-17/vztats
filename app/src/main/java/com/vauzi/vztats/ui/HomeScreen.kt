@@ -45,6 +45,7 @@ import com.vauzi.vztats.core.CoreFreq
 import com.vauzi.vztats.core.CpuMonitor
 import com.vauzi.vztats.core.GpuMonitor
 import com.vauzi.vztats.core.NativeBridge
+import com.vauzi.vztats.core.RamCleaner
 import com.vauzi.vztats.core.SystemSample
 import com.vauzi.vztats.core.ThermalMonitor
 import com.vauzi.vztats.core.TurboManager
@@ -73,6 +74,8 @@ fun HomeScreen(
     // The KGSL description is static for the life of the process; read it once
     // instead of on every 1 s recomposition.
     val gpuDetails = remember { GpuMonitor.readDetails() }
+    var showRamCleaner by remember { mutableStateOf(false) }
+    if (showRamCleaner) RamCleanerDialog(onDismiss = { showRamCleaner = false })
 
     Column(
         modifier
@@ -190,6 +193,19 @@ fun HomeScreen(
                     )
                 }
             }
+
+            // Re-read on each tick; it's an in-memory SharedPreferences lookup.
+            val blockedCount = remember(sample?.timestampMs, showRamCleaner) {
+                RamCleaner.blocked(context).size
+            }
+            NavRow(
+                title = "RAM cleaner",
+                subtitle = if (blockedCount > 0)
+                    "$blockedCount apps blocked from background — open to restore"
+                else "Measure per-app memory, then clean and block",
+                actionLabel = "Open",
+                onClick = { showRamCleaner = true }
+            )
 
             HorizontalDivider(
                 Modifier.padding(vertical = Dimens.SpaceM),
